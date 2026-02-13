@@ -35,7 +35,7 @@ export default function InvoicesPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // VERİLERİ ÇEK
+  // --- VERİLERİ ÇEK ---
   const fetchData = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -66,26 +66,59 @@ export default function InvoicesPage() {
     fetchData();
   }, []);
 
-  // FONKSİYONLAR
+  // --- FONKSİYONLAR ---
+
+  // 1. Fatura Görüntüle
   const handleViewInvoice = (invoiceId: string) => {
     window.open(`/invoice/${invoiceId}`, '_blank');
   };
 
+  // 2. WhatsApp Paylaşım (AKILLI FORMATLAYICI EKLENDİ) 🦅
   const handleShareWhatsApp = (invoiceId: string, customerPhone: string) => {
+    // A. Linki Hazırla
     const url = `${window.location.origin}/invoice/${invoiceId}`;
-    const text = `Merhaba, faturanız: ${url}`;
-    const cleanPhone = customerPhone ? customerPhone.replace(/\D/g,'') : '';
+    const text = `Sayın müşterimiz, faturanız oluşturulmuştur. Detayları buradan görebilirsiniz: ${url}`;
+
+    // B. Telefon Numarasını Temizle ve Formatla
+    let cleanPhone = "";
+
+    if (customerPhone) {
+        // Sadece rakamları al
+        let nums = customerPhone.replace(/\D/g, '');
+
+        // Eğer başında '0' varsa sil (0555 -> 555)
+        if (nums.startsWith('0')) {
+            nums = nums.substring(1);
+        }
+
+        // Eğer 10 haneli kaldıysa (5551234567), başına '90' ekle
+        if (nums.length === 10) {
+            cleanPhone = '90' + nums;
+        } else if (nums.length > 10) {
+            // Zaten 90 ile başlıyorsa veya başka bir ülkeyse dokunma
+            cleanPhone = nums;
+        } else {
+            // Çok kısaysa dokunma (Hatalı numara)
+            cleanPhone = nums;
+        }
+    }
+
+    // C. WhatsApp Linkini Oluştur
+    // Eğer numara boşsa veya hatalıysa bile WhatsApp açılır, kişiyi rehberden sen seçersin.
     const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+    
+    // D. Aç
     window.open(waUrl, '_blank');
   };
 
+  // 3. Silme
   const handleDelete = async (id: string) => {
-    if(!confirm("Silmek istediğinize emin misiniz?")) return;
+    if(!confirm("Bu faturayı silmek istediğinize emin misiniz?")) return;
     await supabase.from('invoices').delete().eq('id', id);
     fetchData();
   };
 
-  // HESAPLAMALAR
+  // --- HESAPLAMALAR ---
   const calculateTotals = () => {
     let subTotal = 0;
     let taxTotal = 0;
@@ -124,8 +157,9 @@ export default function InvoicesPage() {
     setItems(newItems);
   };
 
+  // --- KAYDETME ---
   const handleSave = async () => {
-    if (!newInvoice.customer_id || !companyId) { alert("Müşteri seçin!"); return; }
+    if (!newInvoice.customer_id || !companyId) { alert("Lütfen bir müşteri seçin!"); return; }
     setSaving(true);
     const totals = calculateTotals();
 
@@ -167,7 +201,7 @@ export default function InvoicesPage() {
 
   return (
     <div className="space-y-6">
-      {/* 1. BAŞLIK ALANI (MOBİL UYUMLU: flex-col md:flex-row) */}
+      {/* 1. BAŞLIK ALANI */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#1B2559]">Faturalar</h1>
@@ -181,12 +215,10 @@ export default function InvoicesPage() {
         </button>
       </div>
 
-      {/* 2. LİSTE ALANI (MOBİL UYUMLU: overflow-x-auto) */}
+      {/* 2. LİSTE ALANI (Mobil Uyumlu) */}
       <div className="bg-white rounded-[20px] shadow-sm border border-gray-100 overflow-hidden min-h-[400px]">
-        
-        {/* BU SARMALAYICI (WRAPPER) MOBİLDE KAYDIRMAYI SAĞLAR */}
         <div className="overflow-x-auto">
-          <div className="min-w-[800px]"> {/* Tablo en az 800px genişliğinde kalır */}
+          <div className="min-w-[800px]"> {/* Tablo en az 800px olacak */}
             
             <div className="grid grid-cols-12 gap-4 p-5 border-b border-gray-100 bg-gray-50/50 text-xs font-bold text-gray-400 uppercase tracking-wider">
               <div className="col-span-4">MÜŞTERİ</div>
@@ -239,13 +271,11 @@ export default function InvoicesPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
           <div className="bg-white w-full max-w-4xl rounded-3xl shadow-2xl p-6 md:p-8 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
             <div className="flex justify-between items-center mb-6 pb-4 border-b">
               <h2 className="text-2xl font-bold text-[#1B2559]">Yeni Fatura</h2>
               <button onClick={() => setIsModalOpen(false)}><X size={24} className="text-gray-500 hover:text-red-500" /></button>
             </div>
 
-            {/* Form Fields (Mobilde alt alta gelmesi için grid yapısı) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Müşteri</label>
@@ -268,7 +298,6 @@ export default function InvoicesPage() {
               </div>
             </div>
 
-            {/* Ürün Tablosu (Mobilde kaydırılabilir) */}
             <div className="mb-8 overflow-x-auto">
               <div className="min-w-[600px]">
                 <table className="w-full text-left">
