@@ -1,13 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Sidebar from "./components/Sidebar"; 
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Durmazsaas Panel",
-  description: "Ön Muhasebe Yönetim Sistemi",
+  title: "YusufPanel SaaS",
+  description: "Ön Muhasebe ve Yönetim Paneli",
+};
+
+// 📱 BU KISIM TELEFONDA DÜZGÜN GÖRÜNMESİNİ SAĞLAR
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -17,16 +24,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr">
-      <body className={`${inter.className} bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100`}>
-        <div className="flex min-h-screen">
-          {/* Sidebar: Sabit durur, yer kaplamaz (fixed) */}
-          <Sidebar /> 
-          
-          {/* Ana İçerik: Sidebar'ın genişliği (64 birim) kadar soldan boşluk bırakır */}
-          <main className="flex-1 ml-64 w-full transition-all duration-300">
-            {children}
-          </main>
-        </div>
+      {/* overflow-x-hidden: Sağa taşmayı engeller */}
+      <body className={`${inter.className} bg-gray-50 text-gray-900 antialiased overflow-x-hidden`}>
+        {children}
       </body>
     </html>
   );

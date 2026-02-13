@@ -1,106 +1,106 @@
 'use client';
-
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { supabase } from '../lib/supabase'; 
 import { 
   LayoutDashboard, 
   Users, 
   FileText, 
+  Package, 
   Settings, 
-  LogOut, 
-  Building2,
-  Package // <--- YENİ İKON BURADA
+  LogOut,
+  Loader2,
+  ShieldCheck // Personel yönetimi için yeni ikon
 } from 'lucide-react';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [companyName, setCompanyName] = useState('Yükleniyor...');
+  const [permissions, setPermissions] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   useEffect(() => {
-    async function getCompanyName() {
+    async function getPermissions() {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('companies(name)')
-        .eq('id', user.id)
-        .single();
-
-      const companyData: any = profile?.companies;
-      
-      if (companyData?.name) {
-        setCompanyName(companyData.name);
-      } else {
-        setCompanyName('Durmazsaas');
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('permissions')
+          .eq('id', user.id)
+          .single();
+        
+        // Eğer veritabanında yetki yoksa boş bir obje ata
+        setPermissions(data?.permissions || {});
       }
+      setLoading(false);
     }
-
-    getCompanyName();
+    getPermissions();
   }, []);
 
+  // MENÜ ELEMANLARI - Personeller buraya eklendi
   const menuItems = [
-    { name: 'Ana Sayfa', href: '/', icon: LayoutDashboard },
-    { name: 'Cari Kartlar', href: '/cariler', icon: Users },
-    { name: 'Faturalar', href: '/faturalar', icon: FileText },
-    { name: 'Ürünler', href: '/urunler', icon: Package }, // <--- YENİ LİNK BURADA
-    { name: 'Ayarlar', href: '/settings', icon: Settings },
+    { name: 'Ana Sayfa', path: '/dashboard', icon: LayoutDashboard, key: 'ana_sayfa' },
+    { name: 'Cari Kartlar', path: '/customers', icon: Users, key: 'cari_kartlar' },
+    { name: 'Faturalar', path: '/invoices', icon: FileText, key: 'faturalar' },
+    { name: 'Ürünler', path: '/products', icon: Package, key: 'urunler' },
+    { name: 'Personeller', path: '/staff', icon: ShieldCheck, key: 'personel_yonetimi' }, // YENİ EKLEDİĞİMİZ SATIR
+    { name: 'Ayarlar', path: '/settings', icon: Settings, key: 'ayarlar' },
   ];
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.href = '/login';
-  };
+  if (loading) {
+    return (
+      <div className="w-64 bg-slate-900 h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin text-white w-8 h-8" />
+      </div>
+    );
+  }
 
   return (
-    <aside className="w-64 bg-slate-900 text-white h-screen fixed left-0 top-0 flex flex-col border-r border-slate-800 z-50">
-      
+    <div className="w-64 bg-slate-900 text-white h-screen flex flex-col p-4 shadow-xl">
       {/* Logo Alanı */}
-      <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-        <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-500/20">
-          <Building2 size={24} className="text-white" />
-        </div>
-        <div>
-          <h2 className="font-bold text-sm tracking-tight leading-tight text-white">
-            {companyName}
-          </h2>
-          <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mt-0.5">Yönetim Paneli</p>
-        </div>
+      <div className="mb-10 px-2">
+        <h1 className="text-2xl font-black tracking-tight text-blue-500 uppercase">Durmazsaas</h1>
+        <p className="text-xs text-slate-400 font-medium tracking-widest">YÖNETİM PANELİ</p>
       </div>
 
-      {/* Menü Linkleri */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      {/* Menü Listesi */}
+      <nav className="flex-1 space-y-1">
         {menuItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link 
-              key={item.href} 
-              href={item.href}
-              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium text-sm ${
-                isActive 
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <item.icon size={20} />
-              {item.name}
-            </Link>
-          );
+          // Sadece yetkisi (true) olan menüleri göster
+          if (permissions && permissions[item.key] === true) {
+            const isActive = pathname === item.path;
+            return (
+              <Link 
+                key={item.path} 
+                href={item.path}
+                className={`flex items-center space-x-3 p-3 rounded-xl transition-all duration-200 ${
+                  isActive 
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' 
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <item.icon size={20} />
+                <span className="font-medium">{item.name}</span>
+              </Link>
+            );
+          }
+          return null;
         })}
       </nav>
 
       {/* Çıkış Butonu */}
-      <div className="p-4 border-t border-slate-800">
-        <button 
-          onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-xl transition-all text-sm font-bold"
-        >
-          <LogOut size={20} />
-          Güvenli Çıkış
-        </button>
-      </div>
-    </aside>
+      <button 
+        onClick={() => supabase.auth.signOut().then(() => window.location.href = '/login')}
+        className="flex items-center space-x-3 p-3 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-all mt-auto"
+      >
+        <LogOut size={20} />
+        <span className="font-medium">Güvenli Çıkış</span>
+      </button>
+    </div>
   );
 }
