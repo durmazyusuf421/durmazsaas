@@ -14,9 +14,8 @@ import {
   Wallet, 
   Menu, 
   X, 
-  ShoppingCart, 
-  Banknote 
-} from 'lucide-react'; // Yeni ikonlar eklendi
+  ShoppingCart
+} from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -34,15 +33,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.refresh();
   };
 
-  // 🌟 MENÜYE YENİ EKLENEN VİTRİN VE KASA BUTONLARI
+  // 🌟 TEMİZLENMİŞ VE GÜNCELLENMİŞ MENÜ LİSTESİ
   const navItems = [
     { name: 'Ana Sayfa', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Gelen Siparişler', href: '/dashboard/orders', icon: ShoppingCart }, // YENİ
+    { name: 'Gelen Siparişler', href: '/dashboard/orders', icon: ShoppingCart },
     { name: 'Müşteriler', href: '/dashboard/customers', icon: Users },
     { name: 'Ürünler & Katalog', href: '/dashboard/products', icon: Package },
     { name: 'Faturalar', href: '/dashboard/invoices', icon: FileText },
-    { name: 'Tahsilatlar', href: '/dashboard/payments', icon: Banknote }, // YENİ
-    { name: 'Giderler', href: '/dashboard/expenses', icon: Wallet },
+    { name: 'Kasa & Finans', href: '/dashboard/payments', icon: Wallet }, // Tahsilat ve Giderler burada birleşti!
     { name: 'Ayarlar', href: '/dashboard/settings', icon: Settings },
   ];
 
