@@ -14,7 +14,6 @@ export default function GlobalCustomerLogin() {
   
   const router = useRouter();
   
-  // Supabase bağlantısını kuruyoruz
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -33,7 +32,7 @@ export default function GlobalCustomerLogin() {
       });
 
       if (authError) throw authError;
-      if (!authData.user) throw new Error("Kullanıcı bilgileri alınamadı.");
+      if (!authData.user) throw new Error("Kullanıcı bulunamadı.");
 
       // 2. Profil tablosundan bu kullanıcının Global Cari Kodunu çekiyoruz
       const { data: profile, error: profileError } = await supabase
@@ -44,24 +43,21 @@ export default function GlobalCustomerLogin() {
 
       if (profileError) throw profileError;
 
-      // TypeScript'in 'global_cari_code yoktur' dememesi için 'as any' ile geçiyoruz
+      // Global kodu alıyoruz
       const globalCode = (profile as any)?.global_cari_code;
 
       if (globalCode) {
-        // Eğer müşteri ise kendi portalına git
-        router.push(`/portal/${globalCode}`);
+        // 🚀 GARANTİ YÖNLENDİRME: router.push bazen takılabilir, bu yöntem sayfayı zorla açar.
+        window.location.href = `/portal/${globalCode}`;
       } else {
-        // Eğer global kodu yoksa (muhtemelen işletme sahibidir) ana panele git
-        router.push('/dashboard');
+        // Eğer global kodu yoksa işletme panelidir
+        window.location.href = '/dashboard';
       }
-
-      router.refresh(); // Sayfayı ve session'ı tazele
       
     } catch (err: any) {
       console.error('Giriş Hatası:', err.message);
-      setError("Giriş yapılamadı. E-posta veya şifreniz hatalı olabilir.");
-    } finally {
-      setLoading(false);
+      setError("Giriş yapılamadı. Bilgilerinizi kontrol edin.");
+      setLoading(false); // Sadece hata durumunda loading'i kapatıyoruz, başarılıysa zaten sayfa değişecek.
     }
   };
 
@@ -69,17 +65,15 @@ export default function GlobalCustomerLogin() {
     <div className="min-h-screen flex items-center justify-center bg-[#F4F7FE] p-4 font-sans">
       <div className="bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden border border-gray-100">
         
-        {/* ÜST BAŞLIK ALANI */}
+        {/* ÜST MAVİ PANEL */}
         <div className="bg-[#1B2559] p-10 text-center relative overflow-hidden">
-          {/* Arka plan süsü */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 opacity-10 rounded-full blur-3xl -mr-10 -mt-10"></div>
-          
           <UserCircle size={60} className="mx-auto text-white mb-4 opacity-90" />
           <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Müşteri Portalı</h2>
           <p className="text-blue-200 text-sm font-medium mt-1">Global hesabınızla güvenli giriş yapın.</p>
         </div>
 
-        {/* GİRİŞ FORMU */}
+        {/* FORM ALANI */}
         <div className="p-8">
           {error && (
             <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-xs font-bold border border-red-100 text-center mb-6">
@@ -88,7 +82,6 @@ export default function GlobalCustomerLogin() {
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* E-POSTA */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 tracking-widest">E-Posta Adresi</label>
               <div className="relative">
@@ -106,7 +99,6 @@ export default function GlobalCustomerLogin() {
               </div>
             </div>
 
-            {/* ŞİFRE */}
             <div className="space-y-1">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 tracking-widest">Şifreniz</label>
               <div className="relative">
@@ -124,7 +116,6 @@ export default function GlobalCustomerLogin() {
               </div>
             </div>
 
-            {/* GİRİŞ BUTONU */}
             <button 
               type="submit"
               disabled={loading}
@@ -141,7 +132,7 @@ export default function GlobalCustomerLogin() {
             </button>
           </form>
 
-          {/* ALT LİNKLER */}
+          {/* ALT BİLGİ VE LİNKLER */}
           <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col gap-4">
             <div className="text-center">
               <p className="text-sm font-bold text-gray-400 mb-2 uppercase tracking-tighter">Henüz global kodunuz yok mu?</p>
