@@ -1,173 +1,182 @@
 'use client';
-import React, { useEffect, useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Users, FileText, Package, Wallet, TrendingUp, ArrowRight, Loader2 } from 'lucide-react';
-import Link from 'next/link';
+import { Users, FileText, Wallet, UserCheck, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState({
-    revenue: 0,
-    customers: 0,
-    invoices: 0,
-    products: 0
-  });
-  const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [stats, setStats] = useState({ customers: 0, invoices: 0, revenue: 0 });
+  const [processingId, setProcessingId] = useState<string | null>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  useEffect(() => {
-    const fetchData = async () => {
+  const fetchDashboardData = async () => {
+    try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
+      if (!profile?.company_id) return;
+
+      // 1. BEKLEYEN BAĞLANTI İSTEKLERİNİ ÇEK
+      const { data: requests } = await supabase
+        .from('customer_connections')
+        .select('*')
+        .eq('company_id', profile.company_id)
+        .eq('status', 'onay_bekliyor');
       
-      if (profile?.company_id) {
-        // 1. Ciro (Gelir)
-        const { data: invData } = await supabase.from('invoices').select('total_amount').eq('company_id', profile.company_id);
-        const totalRevenue = invData?.reduce((sum, item) => sum + (item.total_amount || 0), 0) || 0;
+      // Müşteri isimlerini Cari Kod üzerinden eşleştir
+      if (requests && requests.length > 0) {
+        const codes = requests.map((r: any) => r.cari_code);
+        const { data: linkedCustomers } = await supabase
+          .from('customers')
+          .select('name, current_cari_code')
+          .in('current_cari_code', codes);
 
-        // 2. Müşteri Sayısı
-        const { count: custCount } = await supabase.from('customers').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id);
-
-        // 3. Fatura Sayısı
-        const { count: invCount } = await supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id);
-
-        // 4. Ürün Sayısı
-        const { count: prodCount } = await supabase.from('products').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id);
-
-        // 5. Son 5 Fatura
-        const { data: recent } = await supabase
-          .from('invoices')
-          .select('*, customers(name)')
-          .eq('company_id', profile.company_id)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        setStats({
-          revenue: totalRevenue,
-          customers: custCount || 0,
-          invoices: invCount || 0,
-          products: prodCount || 0
+        const enrichedRequests = requests.map((req: any) => {
+          const cust = linkedCustomers?.find(c => c.current_cari_code === req.cari_code);
+          return { ...req, customerName: cust?.name || 'Bilinmeyen Müşteri' };
         });
-        
-        if (recent) setRecentInvoices(recent);
+        setPendingRequests(enrichedRequests);
+      } else {
+        setPendingRequests([]);
       }
-      setLoading(false);
-    };
 
-    fetchData();
+      // 2. İSTATİSTİKLERİ ÇEK
+      const { count: custCount } = await supabase.from('customers').select('*', { count: 'exact', head: true }).eq('company_id', profile.company_id);
+      const { data: invData } = await supabase.from('invoices').select('total_amount').eq('company_id', profile.company_id);
+      
+      const totalRev = invData?.reduce((sum, inv) => sum + (Number(inv.total_amount) || 0), 0) || 0;
+
+      setStats({
+        customers: custCount || 0,
+        invoices: invData?.length || 0,
+        revenue: totalRev
+      });
+
+    } catch (error) {
+      console.error("Veri çekilemedi:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
   }, []);
 
-  if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
+  // 🟢 İSTEĞİ ONAYLA
+  const handleApprove = async (id: string) => {
+    setProcessingId(id);
+    try {
+      const { error } = await supabase.from('customer_connections').update({ status: 'onayli' }).eq('id', id);
+      if (!error) {
+        alert("Bağlantı başarıyla onaylandı!");
+        fetchDashboardData();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  // 🔴 İSTEĞİ REDDET
+  const handleReject = async (id: string) => {
+    if (!confirm("Bu bağlantı isteğini reddetmek istediğinize emin misiniz?")) return;
+    setProcessingId(id);
+    try {
+      const { error } = await supabase.from('customer_connections').delete().eq('id', id);
+      if (!error) fetchDashboardData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={48} /></div>;
 
   return (
-    <div>
-      {/* BAŞLIK */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#1B2559]">Ana Sayfa</h1>
-        <p className="text-gray-500 text-sm">İşletmenizin genel durumunu buradan takip edin.</p>
-      </div>
+    <div className="p-4 md:p-8 space-y-6 text-[#1B2559]">
+      <h1 className="text-2xl font-black italic uppercase tracking-tighter mb-6">Dükkan Özeti</h1>
 
-      {/* --- İSTATİSTİK KARTLARI (MOBİL UYUMLU) --- */}
-      {/* Mobilde 1, Tablette 2, Bilgisayarda 4 Kolon */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-        
-        {/* KART 1: CİRO */}
-        <div className="bg-white p-5 rounded-[20px] shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-          <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
-            <Wallet size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Toplam Ciro</p>
-            <h3 className="text-2xl font-bold text-[#1B2559]">₺{stats.revenue.toLocaleString()}</h3>
-          </div>
-        </div>
-
-        {/* KART 2: MÜŞTERİLER */}
-        <div className="bg-white p-5 rounded-[20px] shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-          <div className="w-12 h-12 rounded-full bg-purple-50 flex items-center justify-center text-purple-600">
-            <Users size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Müşteriler</p>
-            <h3 className="text-2xl font-bold text-[#1B2559]">{stats.customers}</h3>
-          </div>
-        </div>
-
-        {/* KART 3: FATURALAR */}
-        <div className="bg-white p-5 rounded-[20px] shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-          <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
-            <FileText size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Kesilen Fatura</p>
-            <h3 className="text-2xl font-bold text-[#1B2559]">{stats.invoices}</h3>
-          </div>
-        </div>
-
-        {/* KART 4: ÜRÜNLER */}
-        <div className="bg-white p-5 rounded-[20px] shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-shadow">
-          <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-            <Package size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500 font-medium">Ürün/Hizmet</p>
-            <h3 className="text-2xl font-bold text-[#1B2559]">{stats.products}</h3>
-          </div>
-        </div>
-      </div>
-
-      {/* --- SON FATURALAR TABLOSU --- */}
-      <div className="bg-white rounded-[20px] shadow-sm border border-gray-100 p-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-          <h2 className="text-lg font-bold text-[#1B2559] flex items-center gap-2">
-            <TrendingUp size={20} className="text-blue-600"/> Son İşlemler
-          </h2>
-          <Link href="/dashboard/invoices" className="text-sm font-bold text-blue-600 hover:underline flex items-center gap-1">
-            Tümünü Gör <ArrowRight size={16}/>
-          </Link>
-        </div>
-
-        {/* MOBİL İÇİN KAYDIRILABİLİR ALAN (overflow-x-auto) */}
-        <div className="overflow-x-auto">
-          <div className="min-w-[600px]"> {/* Tablo minimum 600px olacak, sığmazsa kayacak */}
-            
-            <div className="grid grid-cols-12 gap-4 pb-2 border-b border-gray-100 text-xs font-bold text-gray-400 uppercase tracking-wider">
-              <div className="col-span-4">MÜŞTERİ</div>
-              <div className="col-span-3">TARİH</div>
-              <div className="col-span-3">TUTAR</div>
-              <div className="col-span-2 text-right">DURUM</div>
+      {/* 🎯 ONAY BEKLEYENLER BİLDİRİM KUTUSU */}
+      {pendingRequests.length > 0 && (
+        <div className="bg-gradient-to-r from-[#3063E9] to-blue-800 p-6 md:p-8 rounded-[32px] shadow-2xl shadow-blue-200/50 flex flex-col md:flex-row items-center justify-between gap-6 animate-in fade-in slide-in-from-top-4 border border-blue-400/30">
+          <div className="flex items-center gap-4 text-white w-full md:w-auto">
+            <div className="bg-white/20 p-4 rounded-2xl backdrop-blur-md">
+              <UserCheck size={32} className="text-white" />
             </div>
-
-            <div className="space-y-4 mt-4">
-              {recentInvoices.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-4">Henüz işlem yok.</p>
-              ) : (
-                recentInvoices.map((inv) => (
-                  <div key={inv.id} className="grid grid-cols-12 gap-4 items-center hover:bg-gray-50 p-2 rounded-lg transition-colors">
-                    <div className="col-span-4 font-bold text-[#1B2559] truncate">{inv.customers?.name}</div>
-                    <div className="col-span-3 text-sm text-gray-500">{new Date(inv.invoice_date).toLocaleDateString('tr-TR')}</div>
-                    <div className="col-span-3 font-bold text-[#1B2559]">₺{inv.total_amount?.toLocaleString()}</div>
-                    <div className="col-span-2 text-right">
-                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
-                        inv.status === 'Ödendi' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'
-                      }`}>
-                        {inv.status}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight">{pendingRequests.length} Yeni Bağlantı İsteği!</h2>
+              <p className="text-blue-100 text-sm font-medium">Müşterileriniz dükkana bağlanmak için onayınızı bekliyor.</p>
             </div>
-
+          </div>
+          
+          <div className="flex flex-col w-full md:w-auto gap-3">
+            {pendingRequests.map(req => (
+              <div key={req.id} className="bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-2xl flex items-center justify-between gap-6">
+                <span className="text-white font-bold ml-2 truncate max-w-[150px]">{req.customerName}</span>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => handleApprove(req.id)}
+                    disabled={processingId === req.id}
+                    className="bg-green-500 hover:bg-green-400 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-green-900/20 active:scale-95"
+                  >
+                    {processingId === req.id ? <Loader2 size={16} className="animate-spin"/> : <><CheckCircle2 size={16} /> Onayla</>}
+                  </button>
+                  <button 
+                    onClick={() => handleReject(req.id)}
+                    disabled={processingId === req.id}
+                    className="bg-white/10 hover:bg-red-500 text-white p-2.5 rounded-xl text-xs font-bold transition-all flex items-center active:scale-95"
+                  >
+                    <XCircle size={16} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+      )}
+
+      {/* İSTATİSTİK KARTLARI */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
+         <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex items-center justify-between group hover:border-blue-200 transition-colors">
+            <div>
+               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">Toplam Müşteri</p>
+               <h2 className="text-4xl font-black">{stats.customers}</h2>
+            </div>
+            <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+               <Users size={32} />
+            </div>
+         </div>
+         
+         <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex items-center justify-between group hover:border-green-200 transition-colors">
+            <div>
+               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">Kesilen Fatura</p>
+               <h2 className="text-4xl font-black">{stats.invoices}</h2>
+            </div>
+            <div className="w-16 h-16 bg-green-50 text-green-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+               <FileText size={32} />
+            </div>
+         </div>
+
+         <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm flex items-center justify-between group hover:border-amber-200 transition-colors">
+            <div>
+               <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-1">Toplam Hacim</p>
+               <h2 className="text-3xl font-black tracking-tighter">₺{stats.revenue.toLocaleString('tr-TR')}</h2>
+            </div>
+            <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+               <Wallet size={32} />
+            </div>
+         </div>
       </div>
     </div>
   );

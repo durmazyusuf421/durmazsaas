@@ -1,15 +1,27 @@
 'use client';
-import { usePathname } from 'next/navigation';
+
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Package, Users, FileText, Settings, LogOut, Wallet, Menu, X } from 'lucide-react'; // İkonlar
-import { createBrowserClient } from '@supabase/ssr';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
+import { 
+  LayoutDashboard, 
+  Package, 
+  Users, 
+  FileText, 
+  Settings, 
+  LogOut, 
+  Wallet, 
+  Menu, 
+  X, 
+  ShoppingCart, 
+  Banknote 
+} from 'lucide-react'; // Yeni ikonlar eklendi
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // Mobil menü durumu
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,11 +34,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     router.refresh();
   };
 
+  // 🌟 MENÜYE YENİ EKLENEN VİTRİN VE KASA BUTONLARI
   const navItems = [
     { name: 'Ana Sayfa', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Gelen Siparişler', href: '/dashboard/orders', icon: ShoppingCart }, // YENİ
     { name: 'Müşteriler', href: '/dashboard/customers', icon: Users },
-    { name: 'Ürünler', href: '/dashboard/products', icon: Package },
+    { name: 'Ürünler & Katalog', href: '/dashboard/products', icon: Package },
     { name: 'Faturalar', href: '/dashboard/invoices', icon: FileText },
+    { name: 'Tahsilatlar', href: '/dashboard/payments', icon: Banknote }, // YENİ
     { name: 'Giderler', href: '/dashboard/expenses', icon: Wallet },
     { name: 'Ayarlar', href: '/dashboard/settings', icon: Settings },
   ];
@@ -34,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-[#F4F7FE] overflow-hidden">
       
-      {/* 1. MOBİL MENÜ BUTONU (Sadece Mobilde Görünür) */}
+      {/* 1. MOBİL MENÜ BUTONU */}
       <div className="md:hidden fixed top-4 right-4 z-50">
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
@@ -51,6 +66,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="h-full flex flex-col justify-between p-6">
+          
           {/* Logo */}
           <div>
             <div className="flex items-center gap-2 mb-10 px-2">
@@ -66,7 +82,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={() => setIsMobileMenuOpen(false)} // Mobilde tıklayınca menü kapansın
+                    onClick={() => setIsMobileMenuOpen(false)}
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-medium ${
                       isActive 
                         ? 'bg-[#3063E9] text-white shadow-lg shadow-blue-500/30' 

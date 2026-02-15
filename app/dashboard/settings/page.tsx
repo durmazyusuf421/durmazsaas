@@ -1,166 +1,184 @@
 'use client';
+
 import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { Save, Building, CreditCard, Phone, Mail, MapPin, Loader2, Globe } from 'lucide-react';
+import { Building2, CreditCard, Save, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
   
-  // Şirket Bilgileri State'i
-  const [company, setCompany] = useState({
-    id: '',
+  const [settings, setSettings] = useState({
     name: '',
-    address: '',
-    phone: '',
-    email: '',
-    website: '',
     bank_name: '',
-    iban: ''
+    iban: '',
+    account_holder: ''
   });
+
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // VERİLERİ ÇEK
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    const fetchSettings = async () => {
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
 
-      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
-      
-      if (profile?.company_id) {
-        const { data: compData } = await supabase
+        const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user.id).single();
+        if (!profile?.company_id) return;
+        
+        setCompanyId(profile.company_id);
+
+        const { data: company } = await supabase
           .from('companies')
-          .select('*')
+          .select('name, bank_name, iban, account_holder')
           .eq('id', profile.company_id)
           .single();
-          
-        if (compData) {
-          setCompany({
-            id: compData.id,
-            name: compData.name || '',
-            address: compData.address || '',
-            phone: compData.phone || '',
-            email: compData.email || '',
-            website: compData.website || '',
-            bank_name: compData.bank_name || '',
-            iban: compData.iban || ''
+
+        if (company) {
+          setSettings({
+            name: company.name || '',
+            bank_name: company.bank_name || '',
+            iban: company.iban || '',
+            account_holder: company.account_holder || ''
           });
         }
+      } catch (error) {
+        console.error("Hata:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    fetchData();
+    fetchSettings();
   }, []);
 
-  // KAYDETME İŞLEMİ
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
+    if (!companyId) return;
     setSaving(true);
+    setSuccess(false);
 
-    const { error } = await supabase
-      .from('companies')
-      .update({
-        name: company.name,
-        address: company.address,
-        phone: company.phone,
-        email: company.email,
-        website: company.website,
-        bank_name: company.bank_name,
-        iban: company.iban
-      })
-      .eq('id', company.id);
+    try {
+      const { error } = await supabase
+        .from('companies')
+        .update({
+          name: settings.name,
+          bank_name: settings.bank_name,
+          iban: settings.iban,
+          account_holder: settings.account_holder
+        })
+        .eq('id', companyId);
 
-    if (error) {
-      alert("Hata: " + error.message);
-    } else {
-      alert("Bilgiler başarıyla güncellendi! 🎉");
+      if (error) throw error;
+      
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000); // 3 saniye sonra yeşil tik kaybolur
+    } catch (error: any) {
+      alert("Kaydederken bir hata oluştu: " + error.message);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
-  if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-blue-600" /></div>;
+  if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={48} /></div>;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      
-      {/* BAŞLIK */}
+    <div className="p-4 md:p-8 max-w-4xl space-y-8 text-[#1B2559]">
       <div>
-        <h1 className="text-2xl font-bold text-[#1B2559]">Şirket Ayarları</h1>
-        <p className="text-gray-500 text-sm">Fatura ve ekstrelerde görünecek bilgilerinizi buradan düzenleyin.</p>
+        <h1 className="text-3xl font-black italic uppercase tracking-tighter">İşletme Ayarları</h1>
+        <p className="text-gray-400 font-medium mt-1">Dükkanınızın vitrinini ve vezne bilgilerini buradan yönetin.</p>
       </div>
 
-      <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
-        {/* SOL KOLON: İletişim Bilgileri */}
-        <div className="bg-white p-6 rounded-[20px] shadow-sm border border-gray-100 space-y-4">
-          <h3 className="font-bold text-[#1B2559] flex items-center gap-2 border-b pb-2 mb-4">
-            <Building size={20} className="text-blue-600"/> Genel Bilgiler
-          </h3>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Şirket Adı</label>
-            <input required type="text" value={company.name} onChange={(e) => setCompany({...company, name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 ring-blue-500/20 font-bold" />
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2"><MapPin size={14}/> Adres</label>
-            <textarea rows={3} value={company.address} onChange={(e) => setCompany({...company, address: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 ring-blue-500/20" placeholder="Mahalle, Cadde, No..." />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2"><Phone size={14}/> Telefon</label>
-              <input type="text" value={company.phone} onChange={(e) => setCompany({...company, phone: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 ring-blue-500/20" placeholder="05..." />
+        {/* 🏢 GENEL BİLGİLER KARTI */}
+        <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-6">
+          <div className="flex items-center gap-3 border-b pb-4">
+            <div className="bg-blue-50 p-3 rounded-2xl text-blue-600">
+              <Building2 size={24} />
             </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2"><Mail size={14}/> E-Posta</label>
-              <input type="email" value={company.email} onChange={(e) => setCompany({...company, email: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 ring-blue-500/20" placeholder="info@..." />
-            </div>
+            <h2 className="text-xl font-bold">Genel Bilgiler</h2>
           </div>
           
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2"><Globe size={14}/> Web Sitesi</label>
-            <input type="text" value={company.website} onChange={(e) => setCompany({...company, website: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 ring-blue-500/20" placeholder="www..." />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">İşletme / Dükkan Adı</label>
+              <input 
+                type="text" 
+                value={settings.name}
+                onChange={(e) => setSettings({...settings, name: e.target.value})}
+                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-blue-500 font-bold transition-all"
+                placeholder="Örn: Durmaz Toptan Gıda"
+              />
+            </div>
+            {/* İleride buraya Logo Yükleme alanı da ekleyebiliriz Patron */}
           </div>
         </div>
 
-        {/* SAĞ KOLON: Banka Bilgileri */}
-        <div className="space-y-6">
-          <div className="bg-white p-6 rounded-[20px] shadow-sm border border-gray-100 space-y-4">
-            <h3 className="font-bold text-[#1B2559] flex items-center gap-2 border-b pb-2 mb-4">
-              <CreditCard size={20} className="text-blue-600"/> Banka Bilgileri (IBAN)
-            </h3>
-            <p className="text-xs text-gray-400 mb-4">Bu bilgiler faturanın en altına eklenecektir.</p>
-
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">Banka Adı</label>
-              <input type="text" value={company.bank_name} onChange={(e) => setCompany({...company, bank_name: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 ring-blue-500/20" placeholder="Örn: Ziraat Bankası" />
+        {/* 💳 BANKA VE IBAN KARTI */}
+        <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm space-y-6">
+          <div className="flex items-center gap-3 border-b pb-4">
+            <div className="bg-green-50 p-3 rounded-2xl text-green-600">
+              <CreditCard size={24} />
+            </div>
+            <h2 className="text-xl font-bold">Ödeme & Banka (Vezne)</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Banka Adı</label>
+              <input 
+                type="text" 
+                value={settings.bank_name}
+                onChange={(e) => setSettings({...settings, bank_name: e.target.value})}
+                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-green-500 font-bold transition-all"
+                placeholder="Örn: Ziraat Bankası"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">Alıcı Adı / Hesap Sahibi</label>
+              <input 
+                type="text" 
+                value={settings.account_holder}
+                onChange={(e) => setSettings({...settings, account_holder: e.target.value})}
+                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-green-500 font-bold transition-all"
+                placeholder="Örn: Yusuf Durmaz"
+              />
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">IBAN Numarası</label>
-              <input type="text" value={company.iban} onChange={(e) => setCompany({...company, iban: e.target.value})} className="w-full p-3 bg-gray-50 rounded-xl outline-none focus:ring-2 ring-blue-500/20 font-mono text-lg tracking-wider uppercase" placeholder="TR..." />
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest ml-1">IBAN Numarası</label>
+              <input 
+                type="text" 
+                value={settings.iban}
+                onChange={(e) => setSettings({...settings, iban: e.target.value})}
+                className="w-full p-4 bg-gray-50 rounded-2xl outline-none border border-transparent focus:border-green-500 font-mono font-bold tracking-wider transition-all"
+                placeholder="TR00 0000 0000 0000 0000 0000 00"
+              />
             </div>
           </div>
-
-          {/* KAYDET BUTONU */}
-          <button 
-            type="submit"
-            disabled={saving}
-            className="w-full bg-[#3063E9] text-white py-4 rounded-xl font-bold hover:bg-[#2552D0] shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all"
-          >
-            {saving ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-            {saving ? "Güncelleniyor..." : "Ayarları Kaydet"}
-          </button>
         </div>
-      </form>
+
+      </div>
+
+      {/* 🚀 KAYDET BUTONU */}
+      <div className="flex justify-end pt-4">
+        <button 
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-[#3063E9] hover:bg-blue-700 text-white px-10 py-4 rounded-2xl font-bold shadow-xl shadow-blue-200 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-70"
+        >
+          {saving ? <Loader2 size={24} className="animate-spin" /> : success ? <><CheckCircle2 size={24} /> Kaydedildi!</> : <><Save size={24} /> Ayarları Kaydet</>}
+        </button>
+      </div>
+
     </div>
   );
 }
