@@ -4,14 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { 
   ShoppingBag, 
-  Clock, 
-  CheckCircle2, 
-  User, 
   Calendar, 
   ChevronRight, 
   Loader2, 
   Package,
-  AlertCircle,
   Search
 } from 'lucide-react';
 
@@ -27,54 +23,71 @@ export default function BusinessOrdersPage() {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      // 1. Giriş yapan patronun bilgilerini al
+      setLoading(true);
+      
+      // 1. Kullanıcıyı kontrol et
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-      // 2. Patronun şirketini bul
-      const { data: company } = await supabase
+      // 2. 406 HATASINI ÇÖZEN KISIM: Dükkanı .limit(1) ile buluyoruz
+      const { data: companies, error: compError } = await supabase
         .from('companies')
-        .select('id')
+        .select('id, name')
         .eq('owner_id', user.id)
-        .single();
+        .limit(1);
 
-      if (company) {
-        // 3. Şirkete gelen siparişleri çek
-        const { data: ordersData, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('company_id', company.id)
-          .order('created_at', { ascending: false });
+      // Eğer dükkan bulunamazsa veya hata verirse durdur
+      if (compError || !companies || companies.length === 0) {
+        console.error("Dükkan bulunamadı:", compError);
+        setLoading(false);
+        return;
+      }
 
-        if (ordersData) {
-          // 4. KRİTİK ADIM: Her siparişin CARI KODU ile müşterinin ismini bul
-          const ordersWithCustomerData = await Promise.all(
-            ordersData.map(async (order) => {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('full_name')
-                .eq('global_cari_code', order.customer_cari_code)
-                .single();
+      const company = companies[0]; // İlk (ve tek) dükkanı al
 
-              // Siparişteki 'items' sütunu (JSON) içindeki ürün sayısını hesapla
-              let itemCount = 0;
-              try {
-                const parsedItems = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
-                itemCount = Array.isArray(parsedItems) ? parsedItems.length : 0;
-              } catch (e) {
-                itemCount = 0;
+      // 3. Siparişleri bu dükkanın ID'si ile çek
+      const { data: ordersData, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('company_id', company.id)
+        .order('created_at', { ascending: false });
+
+      if (orderError) {
+        console.error("Siparişler çekilirken hata:", orderError);
+      }
+
+      if (ordersData) {
+        // 4. Müşteri isimlerini 'profiles' tablosundan eşleştir
+        const ordersWithCustomerData = await Promise.all(
+          ordersData.map(async (order) => {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('global_cari_code', order.customer_cari_code)
+              .maybeSingle();
+
+            // Ürün (kalem) sayısını hesapla
+            let itemCount = 0;
+            try {
+              if (order.items) {
+                 const parsed = typeof order.items === 'string' ? JSON.parse(order.items) : order.items;
+                 itemCount = Array.isArray(parsed) ? parsed.length : 0;
               }
+            } catch (e) { 
+              itemCount = 0; 
+            }
 
-              return {
-                ...order,
-                customer_name: profile?.full_name || 'Bilinmeyen Müşteri',
-                item_count: itemCount
-              };
-            })
-          );
-
-          setOrders(ordersWithCustomerData);
-        }
+            return {
+              ...order,
+              customer_name: profile?.full_name || 'Bilinmeyen Müşteri',
+              item_count: itemCount
+            };
+          })
+        );
+        setOrders(ordersWithCustomerData);
       }
       setLoading(false);
     };
@@ -155,7 +168,7 @@ export default function BusinessOrdersPage() {
               <div className="flex items-center justify-between md:justify-end w-full md:w-auto gap-8 border-t md:border-t-0 pt-4 md:pt-0">
                 <div className="text-left md:text-right">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Toplam Tutar</p>
-                  <p className="text-2xl font-black text-[#1B2559]">{order.total_amount.toLocaleString('tr-TR')} ₺</p>
+                  <p className="text-2xl font-black text-[#1B2559]">{order.total_amount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺</p>
                 </div>
 
                 <div className="flex items-center gap-4">
