@@ -32,27 +32,27 @@ export default function BusinessOrdersPage() {
         return;
       }
 
-      // 2. 406 HATASINI ÇÖZEN KISIM: Dükkanı .limit(1) ile buluyoruz
+      // 2. KULLANICIYA AİT "TÜM" DÜKKANLARI ÇEK
       const { data: companies, error: compError } = await supabase
         .from('companies')
         .select('id, name')
-        .eq('owner_id', user.id)
-        .limit(1);
+        .eq('owner_id', user.id);
 
-      // Eğer dükkan bulunamazsa veya hata verirse durdur
+      // Eğer hiç dükkan yoksa durdur
       if (compError || !companies || companies.length === 0) {
         console.error("Dükkan bulunamadı:", compError);
         setLoading(false);
         return;
       }
 
-      const company = companies[0]; // İlk (ve tek) dükkanı al
+      // 3. Dükkanların ID'lerini bir listeye al (Böylece 1. ve 2. şube dahil tüm siparişler gelir)
+      const companyIds = companies.map(c => c.id);
 
-      // 3. Siparişleri bu dükkanın ID'si ile çek
+      // 4. Siparişleri bu ID listesi ile çek
       const { data: ordersData, error: orderError } = await supabase
         .from('orders')
         .select('*')
-        .eq('company_id', company.id)
+        .in('company_id', companyIds)
         .order('created_at', { ascending: false });
 
       if (orderError) {
@@ -60,7 +60,7 @@ export default function BusinessOrdersPage() {
       }
 
       if (ordersData) {
-        // 4. Müşteri isimlerini 'profiles' tablosundan eşleştir
+        // 5. Müşteri isimlerini 'profiles' tablosundan eşleştir
         const ordersWithCustomerData = await Promise.all(
           ordersData.map(async (order) => {
             const { data: profile } = await supabase
