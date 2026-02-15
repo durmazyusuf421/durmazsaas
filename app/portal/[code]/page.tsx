@@ -6,7 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { LayoutDashboard, ShoppingBag, FileText, LogOut, Loader2, Building2 } from 'lucide-react';
 
 export default function CustomerDashboard() {
-  const { code } = useParams();
+  const params = useParams();
+  const code = params?.code; // URL'deki CARI-XXXX kodunu buradan yakalıyoruz
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -34,12 +35,12 @@ export default function CustomerDashboard() {
       setLoading(false);
     };
 
-    fetchProfile();
-  }, [code]);
+    if (code) fetchProfile();
+  }, [code, router, supabase]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/portal');
+    window.location.href = '/portal';
   };
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-[#F4F7FE]"><Loader2 className="animate-spin text-[#3063E9]" size={48} /></div>;
@@ -51,7 +52,7 @@ export default function CustomerDashboard() {
         <div>
           <div className="flex items-center gap-2 mb-10">
             <div className="w-8 h-8 bg-[#3063E9] rounded-lg flex items-center justify-center font-bold">Y</div>
-            <span className="text-xl font-black tracking-tighter uppercase">Müşteri Portalı</span>
+            <span className="text-xl font-black tracking-tighter uppercase text-white">Müşteri Portalı</span>
           </div>
           <nav className="space-y-2">
             <button className="w-full flex items-center gap-3 px-4 py-3 bg-[#3063E9] rounded-xl font-bold transition-all"><LayoutDashboard size={20}/> Özet</button>
