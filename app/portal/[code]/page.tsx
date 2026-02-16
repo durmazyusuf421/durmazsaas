@@ -4,19 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  FileText, 
-  LogOut, 
-  Loader2, 
-  Building2, 
-  Store, 
-  CalendarDays, 
-  ChevronRight, 
-  Wallet, 
-  Bell, 
-  UserCircle,
-  Rocket 
+  LayoutDashboard, ShoppingBag, FileText, LogOut, Loader2, Building2, Store, 
+  CalendarDays, ChevronRight, Wallet, UserCircle, Rocket, Printer, X, History, CheckCircle2 
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -27,7 +16,12 @@ export default function CustomerDashboard() {
   
   const [profile, setProfile] = useState<any>(null);
   const [linkedBusinesses, setLinkedBusinesses] = useState<any[]>([]);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // EKSTRE MODALI STATE'LERİ
+  const [statementModalOpen, setStatementModalOpen] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState<any>(null);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,30 +30,28 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      // 1. Auth kontrolü
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/portal');
-        return;
-      }
+      if (!user) { router.push('/portal'); return; }
 
       try {
-        // 2. Müşteri profilini çek
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('global_cari_code', code)
-          .single();
-
+        // 1. Profil
+        const { data: profileData } = await supabase.from('profiles').select('*').eq('global_cari_code', code).single();
         if (profileData) setProfile(profileData);
 
-        // 3. Bağlı olduğu işletmeleri çek
-        const { data: businesses } = await supabase
-          .from('customers')
-          .select('id, created_at, company_id, companies(name)')
-          .eq('current_cari_code', code);
-
+        // 2. Bağlı İşletmeler
+        const { data: businesses } = await supabase.from('customers').select('id, created_at, company_id, companies(name)').eq('current_cari_code', code);
         if (businesses) setLinkedBusinesses(businesses);
+
+        // 3. TÜM Siparişler (Ekstre ve Bakiye hesaplamak için)
+        const { data: orders } = await supabase.from('orders').select('*').eq('customer_cari_code', code).order('created_at', { ascending: false });
+        if (orders) {
+          const parsedOrders = orders.map(o => {
+            let items = [];
+            try { items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items; } catch (e) { items = []; }
+            return { ...o, parsed_items: items };
+          });
+          setAllOrders(parsedOrders);
+        }
       } catch (error) {
         console.error("Veri yükleme hatası:", error);
       } finally {
@@ -75,68 +67,52 @@ export default function CustomerDashboard() {
     router.push('/portal');
   };
 
-  if (loading) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#F4F7FE] gap-4">
-        <Loader2 className="animate-spin text-[#3063E9]" size={48} />
-        <p className="text-[#1B2559] font-bold animate-pulse uppercase tracking-widest text-xs">Portala Giriş Yapılıyor...</p>
-      </div>
-    );
-  }
+  // İŞLETMEYE GÖRE BAKİYE HESAPLAMA (Sadece Tamamlananlar)
+  const calculateBalanceForBusiness = (companyId: string) => {
+    const businessOrders = allOrders.filter(o => o.company_id === companyId && o.status === 'Tamamlandı');
+    return businessOrders.reduce((sum, order) => sum + Number(order.total_amount), 0);
+  };
+
+  // EKSTRE MODALINI AÇ
+  const openStatement = (business: any) => {
+    setSelectedBusiness(business);
+    setStatementModalOpen(true);
+  };
+
+  if (loading) return <div className="h-screen flex flex-col items-center justify-center bg-[#F4F7FE] gap-4"><Loader2 className="animate-spin text-[#3063E9]" size={48} /><p className="text-[#1B2559] font-bold animate-pulse uppercase tracking-widest text-xs">Portala Giriş Yapılıyor...</p></div>;
+
+  // SEÇİLİ İŞLETMENİN SİPARİŞLERİ (EKSTRE İÇİN)
+  const statementOrders = selectedBusiness ? allOrders.filter(o => o.company_id === selectedBusiness.company_id && o.status === 'Tamamlandı') : [];
+  const statementTotal = selectedBusiness ? calculateBalanceForBusiness(selectedBusiness.company_id) : 0;
 
   return (
-    <div className="min-h-screen bg-[#F4F7FE] flex font-sans">
+    <div className="min-h-screen bg-[#F4F7FE] flex font-sans print:bg-white print:p-0">
       
-      {/* --- SOL MENÜ (SIDEBAR) --- */}
-      <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl">
+      {/* SOL MENÜ (Yazdırırken Gizlenir) */}
+      <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-12">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Rocket className="text-white" size={22} />
-            </div>
-            <span className="text-2xl font-black tracking-tighter uppercase italic text-white">
-                Durmaz<span className="text-blue-500">SaaS</span>
-            </span>
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg"><Rocket className="text-white" size={22} /></div>
+            <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
           </div>
-
           <nav className="space-y-3">
-            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20">
-              <LayoutDashboard size={22}/> Özet Panel
-            </Link>
-
-            {/* ÇALIŞMAYAN BUTON ARTIK LİNK OLDU */}
-            <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-              <ShoppingBag size={22} className="group-hover:text-white"/> Siparişlerim
-            </Link>
-
-            <button className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 rounded-2xl font-bold transition-all group">
-              <FileText size={22} className="group-hover:text-white"/> Ekstrelerim
-            </button>
-            <button className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 rounded-2xl font-bold transition-all group">
-              <Bell size={22} className="group-hover:text-white"/> Bildirimler
-            </button>
+            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg"><LayoutDashboard size={22}/> Özet Panel</Link>
+            <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group"><ShoppingBag size={22} className="group-hover:text-white"/> Sipariş & Mutabakat</Link>
           </nav>
         </div>
-
-        <button onClick={handleLogout} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20">
-          <LogOut size={22}/> Güvenli Çıkış
-        </button>
+        <button onClick={handleLogout} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20"><LogOut size={22}/> Güvenli Çıkış</button>
       </aside>
 
-      {/* --- ANA İÇERİK ALANI --- */}
-      <main className="flex-1 lg:ml-72 p-6 md:p-12">
-        <div className="max-w-6xl mx-auto space-y-10">
+      {/* ANA İÇERİK */}
+      <main className="flex-1 lg:ml-72 p-6 md:p-12 print:m-0 print:p-0">
+        <div className="max-w-6xl mx-auto space-y-10 print:hidden">
           
           {/* ÜST BAR */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-8 rounded-[40px] shadow-sm border border-white gap-6">
             <div className="flex items-center gap-5">
-              <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-600 border border-blue-100">
-                <UserCircle size={40} />
-              </div>
+              <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-600"><UserCircle size={40} /></div>
               <div>
-                <h1 className="text-3xl font-black text-[#1B2559] uppercase tracking-tighter leading-none">
-                    {profile?.full_name || 'Müşteri'}
-                </h1>
+                <h1 className="text-3xl font-black text-[#1B2559] uppercase tracking-tighter leading-none">{profile?.full_name || 'Müşteri'}</h1>
                 <p className="text-blue-500 font-bold text-sm mt-2 tracking-widest uppercase">Global Cari: {code}</p>
               </div>
             </div>
@@ -146,34 +122,11 @@ export default function CustomerDashboard() {
             </div>
           </div>
 
-          {/* İSTATİSTİKLER */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="bg-white p-8 rounded-[40px] shadow-sm border border-white flex items-center gap-6 group">
-              <div className="w-20 h-20 bg-[#F4F7FE] text-[#3063E9] rounded-[30px] flex items-center justify-center shrink-0">
-                <Building2 size={36}/>
-              </div>
-              <div>
-                <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-1">Bağlı İşletmeler</p>
-                <h3 className="text-5xl font-black text-[#1B2559]">{linkedBusinesses.length}</h3>
-              </div>
-            </div>
-
-            <div className="bg-[#3063E9] p-8 rounded-[40px] shadow-xl shadow-blue-500/20 flex items-center gap-6 text-white relative overflow-hidden">
-              <div className="w-20 h-20 bg-white/20 rounded-[30px] flex items-center justify-center shrink-0 backdrop-blur-md">
-                <Wallet size={36}/>
-              </div>
-              <div>
-                <p className="text-[11px] font-black text-blue-200 uppercase tracking-[0.2em] mb-1">Bekleyen Sipariş</p>
-                <h3 className="text-5xl font-black">0</h3>
-              </div>
-            </div>
-          </div>
-
-          {/* İŞLETMELER LİSTESİ */}
+          {/* İŞLETMELER LİSTESİ VE BAKİYELER */}
           <div className="space-y-6">
              <div className="flex items-center justify-between px-2">
                 <h2 className="text-2xl font-black text-[#1B2559] uppercase tracking-tighter flex items-center gap-3">
-                    <Store size={28} className="text-blue-500" /> B2B İş Ortaklarım
+                    <Store size={28} className="text-blue-500" /> B2B İş Ortaklarım ve Bakiyeler
                 </h2>
              </div>
 
@@ -181,36 +134,141 @@ export default function CustomerDashboard() {
                 <div className="bg-white p-20 rounded-[50px] border-2 border-dashed border-gray-100 text-center">
                     <Store size={48} className="mx-auto text-gray-200 mb-4"/>
                     <h3 className="text-2xl font-black text-[#1B2559] uppercase tracking-tighter">Bağlantı Bulunamadı</h3>
-                    <p className="text-gray-400">Henüz bir toptancıya bağlı değilsiniz.</p>
                 </div>
              ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {linkedBusinesses.map((b, index) => (
-                      <Link 
-                        key={index}
-                        href={`/portal/${code}/store/${b.company_id}`} 
-                        className="group bg-white p-8 rounded-[40px] border border-transparent hover:border-blue-500/30 hover:shadow-2xl transition-all flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-6">
-                            <div className="w-16 h-16 bg-gray-50 text-blue-500 rounded-3xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">
-                                <Store size={30}/>
-                            </div>
-                            <div>
-                                <h4 className="text-xl font-black text-[#1B2559] uppercase group-hover:text-blue-600 transition-colors leading-none mb-2">
-                                    {b.companies?.name || 'Toptancı'}
-                                </h4>
-                                <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                                    <CalendarDays size={14} className="text-blue-400"/> {new Date(b.created_at).toLocaleDateString('tr-TR')}
+                    {linkedBusinesses.map((b, index) => {
+                      const businessBalance = calculateBalanceForBusiness(b.company_id);
+                      return (
+                        <div key={index} className="bg-white p-8 rounded-[40px] shadow-sm hover:shadow-xl transition-all border border-gray-50 flex flex-col justify-between group">
+                          
+                          {/* İŞLETME BİLGİSİ */}
+                          <div className="flex justify-between items-start mb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 bg-gray-50 text-blue-500 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all"><Building2 size={24}/></div>
+                                <div>
+                                    <h4 className="text-xl font-black text-[#1B2559] uppercase">{b.companies?.name || 'Toptancı'}</h4>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Kayıt: {new Date(b.created_at).toLocaleDateString('tr-TR')}</p>
                                 </div>
                             </div>
+                            <Link href={`/portal/${code}/store/${b.company_id}`} className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-colors" title="Sipariş Ver">
+                              <ShoppingBag size={18}/>
+                            </Link>
+                          </div>
+
+                          {/* BAKİYE VE EKSTRE BUTONU */}
+                          <div className="bg-[#F4F7FE] p-5 rounded-3xl flex items-center justify-between border border-blue-50/50">
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Bu İşletmeye Olan Borcunuz</p>
+                              <p className="text-2xl font-black text-[#1B2559]">{businessBalance.toLocaleString('tr-TR')} ₺</p>
+                            </div>
+                            <button 
+                              onClick={() => openStatement(b)}
+                              className="bg-white px-5 py-3 rounded-2xl text-xs font-black text-blue-600 uppercase tracking-widest hover:bg-blue-600 hover:text-white border border-blue-100 transition-all flex items-center gap-2 shadow-sm"
+                            >
+                              <History size={16} /> Ekstre
+                            </button>
+                          </div>
+
                         </div>
-                        <ChevronRight size={24} className="text-gray-300 group-hover:text-blue-500 transform group-hover:translate-x-2 transition-all"/>
-                      </Link>
-                    ))}
+                      )
+                    })}
                 </div>
              )}
           </div>
         </div>
+
+        {/* -------------------------------------------------------------------------------- */}
+        {/* YAZDIRILABİLİR EKSTRE MODALI (Sadece bu kısım print:block ile yazıcıya gider) */}
+        {/* -------------------------------------------------------------------------------- */}
+        {statementModalOpen && selectedBusiness && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-[#1B2559]/80 backdrop-blur-md print:static print:bg-white print:p-0 print:block">
+            
+            <div className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] rounded-none md:rounded-[40px] shadow-2xl flex flex-col print:shadow-none print:w-full print:max-w-none print:h-auto">
+              
+              {/* MODAL BAŞLIK (Ekranda görünür, Yazıcıda Gizlenir) */}
+              <div className="bg-blue-600 p-6 flex justify-between items-center shrink-0 print:hidden md:rounded-t-[40px]">
+                <h2 className="text-white font-black uppercase flex items-center gap-3"><FileText /> Cari Hesap Ekstresi</h2>
+                <div className="flex gap-4">
+                  <button onClick={() => window.print()} className="bg-white text-blue-600 px-6 py-2 rounded-xl font-black uppercase text-xs flex items-center gap-2 hover:bg-blue-50"><Printer size={16}/> Yazdır</button>
+                  <button onClick={() => setStatementModalOpen(false)} className="bg-blue-700 text-white p-2 rounded-xl hover:bg-blue-800"><X /></button>
+                </div>
+              </div>
+
+              {/* YAZDIRILACAK A4 ALANI */}
+              <div className="p-8 md:p-12 overflow-y-auto custom-scrollbar flex-1 bg-white print:overflow-visible print:p-0">
+                
+                {/* ANTET (Yazıcıda ve Ekranda Görünür) */}
+                <div className="border-b-2 border-gray-200 pb-8 mb-8 flex justify-between items-start">
+                  <div>
+                    <h1 className="text-4xl font-black text-[#1B2559] uppercase tracking-tighter">{selectedBusiness.companies?.name}</h1>
+                    <p className="text-gray-400 font-bold uppercase tracking-widest mt-2 text-xs">Cari Hesap Mutabakat Ekstresi</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-500 uppercase">Müşteri</p>
+                    <p className="text-xl font-black text-[#1B2559] uppercase">{profile?.full_name}</p>
+                    <p className="text-xs font-bold text-gray-400 mt-1">Cari Kodu: {code}</p>
+                    <p className="text-xs font-bold text-gray-400 mt-1">Tarih: {new Date().toLocaleDateString('tr-TR')}</p>
+                  </div>
+                </div>
+
+                {/* HAREKETLER LİSTESİ */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-black text-[#1B2559] uppercase mb-4 border-b border-gray-100 pb-2 flex items-center gap-2"><History size={20}/> Onaylanmış Fişler / Faturalar</h3>
+                  
+                  {statementOrders.length === 0 ? (
+                    <p className="text-gray-400 font-bold text-center py-10 uppercase text-xs">Bu işletmeyle henüz onaylanmış bir hareketiniz bulunmuyor.</p>
+                  ) : (
+                    <div className="space-y-6">
+                      {statementOrders.map((order, index) => (
+                        <div key={order.id} className="border border-gray-200 rounded-2xl p-6 print:border-gray-300 print:break-inside-avoid">
+                          <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
+                            <div>
+                              <p className="font-black text-[#1B2559] uppercase flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500"/> İşlem No: {order.id.slice(0,8)}</p>
+                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{new Date(order.created_at).toLocaleString('tr-TR')}</p>
+                            </div>
+                            <p className="text-xl font-black text-[#1B2559]">{order.total_amount} ₺</p>
+                          </div>
+                          
+                          {/* Fişin İçindeki Ürünler (Detay) */}
+                          <div className="bg-gray-50 p-4 rounded-xl print:bg-transparent">
+                            <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-gray-400 uppercase mb-2 border-b border-gray-200 pb-2">
+                              <div className="col-span-6">Ürün Açıklaması</div>
+                              <div className="col-span-3 text-center">Miktar</div>
+                              <div className="col-span-3 text-right">Tutar</div>
+                            </div>
+                            {order.parsed_items?.map((item: any, idx: number) => (
+                              <div key={idx} className="grid grid-cols-12 gap-2 text-xs font-bold text-[#1B2559] py-1">
+                                <div className="col-span-6">{item.name}</div>
+                                <div className="col-span-3 text-center">{item.quantity} x {item.price || 0}₺</div>
+                                <div className="col-span-3 text-right text-blue-600">{((item.quantity || 0) * (item.price || 0)).toLocaleString('tr-TR')} ₺</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* GENEL TOPLAM (Yazıcı Dibe İtecek) */}
+                <div className="flex justify-end mt-12 pt-8 border-t-2 border-[#1B2559]">
+                  <div className="w-full md:w-1/2 bg-gray-50 p-6 rounded-3xl border border-gray-200 print:bg-transparent print:border-none print:p-0 text-right">
+                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Toplam Güncel Borç Bakiyesi</p>
+                    <p className="text-5xl font-black text-[#1B2559]">{statementTotal.toLocaleString('tr-TR')} <span className="text-2xl text-blue-600">₺</span></p>
+                  </div>
+                </div>
+
+                {/* YAZICI İÇİN ALT BİLGİ */}
+                <div className="hidden print:block mt-20 text-center text-[10px] font-bold text-gray-400 uppercase border-t border-gray-200 pt-4">
+                  Bu belge Durmaz SaaS altyapısı tarafından otomatik olarak oluşturulmuştur. Elektronik ortamda onaylanan fişlerin dökümüdür.
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
