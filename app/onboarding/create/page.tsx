@@ -16,21 +16,28 @@ export default function CreateCompanyPage() {
     setLoading(true);
 
     try {
+      // 1. ÖNCE KULLANICIYI (PATRONU) BULUYORUZ
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Kullanıcı oturumu bulunamadı.");
+
       const randomCode = Math.floor(100000 + Math.random() * 900000).toString();
       
-      // 1. Şirketi oluştur
+      // 2. ŞİRKETİ OLUŞTURUYORUZ (owner_id EKLENDİ! 🚀)
       const { data: company, error: cErr } = await supabase
         .from('companies')
-        .insert([{ name, join_code: randomCode }])
+        .insert([{ 
+          name, 
+          join_code: randomCode,
+          owner_id: user.id // İŞTE TAPUYU KESTİĞİMİZ YER BURASI!
+        }])
         .select().single();
 
       if (cErr) throw cErr;
 
-      // 2. Seni admin yap
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('profiles').update({ company_id: company.id, role: 'admin' }).eq('id', user?.id);
+      // 3. SENİ ADMİN YAP VE PROFİLİNE DÜKKANI BAĞLA
+      await supabase.from('profiles').update({ company_id: company.id, role: 'admin' }).eq('id', user.id);
 
-      // 3. Oturumu tazele ve içeri gir
+      // 4. OTURUMU TAZELE VE İÇERİ GİR
       await supabase.auth.refreshSession();
       window.location.href = '/dashboard';
 
@@ -50,9 +57,14 @@ export default function CreateCompanyPage() {
             placeholder="İşletme Adı" 
             value={name} 
             onChange={(e) => setName(e.target.value)}
-            className="w-full p-4 bg-gray-50 rounded-xl border-none outline-none focus:ring-2 ring-blue-500"
+            className="w-full p-4 bg-gray-50 rounded-xl border-none outline-none focus:ring-2 ring-blue-500 font-bold text-[#1B2559]"
+            required
           />
-          <button className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold">
+          <button 
+            type="submit"
+            disabled={loading || !name}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+          >
             {loading ? "Kuruluyor..." : "Hemen Oluştur"}
           </button>
         </form>
