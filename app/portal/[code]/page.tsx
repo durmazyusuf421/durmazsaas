@@ -5,7 +5,7 @@ import { createBrowserClient } from '@supabase/ssr';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, ShoppingBag, FileText, LogOut, Loader2, Building2, Store, 
-  CalendarDays, ChevronRight, Wallet, UserCircle, Rocket, Printer, X, History, CheckCircle2 
+  ChevronRight, Wallet, UserCircle, Rocket, Printer, X, History, CheckCircle2 
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -22,8 +22,6 @@ export default function CustomerDashboard() {
   // EKSTRE MODALI VE YAZDIRMA STATE'LERİ
   const [statementModalOpen, setStatementModalOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState<any>(null);
-  
-  // Hangi fişlerin seçildiği ve tekil yazdırma modu
   const [selectedPrintIds, setSelectedPrintIds] = useState<string[]>([]);
   const [singlePrintId, setSinglePrintId] = useState<string | null>(null);
 
@@ -75,37 +73,31 @@ export default function CustomerDashboard() {
 
   const openStatement = (business: any) => {
     setSelectedBusiness(business);
-    setSelectedPrintIds([]); // Modal açıldığında seçimleri sıfırla
+    setSelectedPrintIds([]); 
     setSinglePrintId(null);
     setStatementModalOpen(true);
   };
 
-  // --- YAZDIRMA FONKSİYONLARI ---
-
-  // Checkbox işaretleme
   const toggleSelection = (id: string) => {
     setSelectedPrintIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  // Sadece listeden seçili olanları yazdırır
   const handlePrintSelected = () => {
-    setSinglePrintId(null); // Tekil modu kapat
+    setSinglePrintId(null); 
     setTimeout(() => window.print(), 100);
   };
 
-  // Her şeyi yazdırır (Seçimleri temizler)
   const handlePrintAll = () => {
     setSinglePrintId(null);
-    setSelectedPrintIds([]); // Boş liste = Her şey görünür kuralı
+    setSelectedPrintIds([]); 
     setTimeout(() => window.print(), 100);
   };
 
-  // Herhangi bir fişin yanındaki "Yazdır" butonuna basınca (Sadece onu yazdırır)
   const handlePrintSingle = (id: string) => {
     setSinglePrintId(id);
     setTimeout(() => {
       window.print();
-      setSinglePrintId(null); // Yazdırma bitince görünümü eski haline getir
+      setSinglePrintId(null); 
     }, 100);
   };
 
@@ -117,16 +109,27 @@ export default function CustomerDashboard() {
   return (
     <div className="min-h-screen bg-[#F4F7FE] flex font-sans print:bg-white print:p-0">
       
-      {/* SOL MENÜ (Yazdırırken Gizlenir) */}
+      {/* SOL MENÜ */}
       <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl print:hidden">
         <div>
           <div className="flex items-center gap-3 mb-12">
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg"><Rocket className="text-white" size={22} /></div>
             <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
           </div>
+          
+          {/* GÜNCELLENMİŞ NAVİGASYON (Sipariş Ver Eklendi) */}
           <nav className="space-y-3">
-            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg"><LayoutDashboard size={22}/> Özet Panel</Link>
-            <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group"><ShoppingBag size={22} className="group-hover:text-white"/> Sipariş & Mutabakat</Link>
+            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg">
+              <LayoutDashboard size={22}/> Özet Panel
+            </Link>
+            
+            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
+               <Store size={22} className="group-hover:text-white" /> Sipariş Ver
+            </Link>
+
+            <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
+              <ShoppingBag size={22} className="group-hover:text-white"/> Sipariş & Mutabakat
+            </Link>
           </nav>
         </div>
         <button onClick={handleLogout} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20"><LogOut size={22}/> Güvenli Çıkış</button>
@@ -200,37 +203,27 @@ export default function CustomerDashboard() {
           </div>
         </div>
 
-        {/* -------------------------------------------------------------------------------- */}
         {/* YAZDIRILABİLİR EKSTRE MODALI */}
-        {/* -------------------------------------------------------------------------------- */}
         {statementModalOpen && selectedBusiness && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-[#1B2559]/80 backdrop-blur-md print:static print:bg-white print:p-0 print:block">
             <div className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] rounded-none md:rounded-[40px] shadow-2xl flex flex-col print:shadow-none print:w-full print:max-w-none print:h-auto">
               
-              {/* MODAL BAŞLIK (Akıllı Butonlar) */}
               <div className="bg-blue-600 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 print:hidden md:rounded-t-[40px]">
                 <h2 className="text-white font-black uppercase flex items-center gap-3"><FileText /> Cari Hesap Ekstresi</h2>
                 <div className="flex items-center gap-3 w-full md:w-auto">
-                  
-                  {/* SEÇİLİ OLANLARI YAZDIR BUTONU (Sadece seçim varsa görünür) */}
                   {selectedPrintIds.length > 0 && (
                     <button onClick={handlePrintSelected} className="bg-orange-500 text-white px-4 py-2 rounded-xl font-black uppercase text-xs flex items-center gap-2 hover:bg-orange-600 shadow-lg">
                       <Printer size={16}/> Seçili ({selectedPrintIds.length}) Yazdır
                     </button>
                   )}
-
                   <button onClick={handlePrintAll} className="bg-white text-blue-600 px-4 py-2 rounded-xl font-black uppercase text-xs flex items-center gap-2 hover:bg-blue-50 shadow-lg">
                     <Printer size={16}/> Tümünü Yazdır
                   </button>
-                  
                   <button onClick={() => setStatementModalOpen(false)} className="bg-blue-700 text-white p-2 rounded-xl hover:bg-blue-800 ml-auto md:ml-2"><X /></button>
                 </div>
               </div>
 
-              {/* YAZDIRILACAK A4 ALANI */}
               <div className="p-8 md:p-12 overflow-y-auto custom-scrollbar flex-1 bg-white print:overflow-visible print:p-0">
-                
-                {/* ANTET */}
                 <div className="border-b-2 border-gray-200 pb-8 mb-8 flex justify-between items-start">
                   <div>
                     <h1 className="text-4xl font-black text-[#1B2559] uppercase tracking-tighter">{selectedBusiness.companies?.name}</h1>
@@ -244,7 +237,6 @@ export default function CustomerDashboard() {
                   </div>
                 </div>
 
-                {/* HAREKETLER LİSTESİ */}
                 <div className="mb-8">
                   <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-2">
                     <h3 className="text-lg font-black text-[#1B2559] uppercase flex items-center gap-2"><History size={20}/> Onaylanmış Fişler / Faturalar</h3>
@@ -256,22 +248,12 @@ export default function CustomerDashboard() {
                   ) : (
                     <div className="space-y-6">
                       {statementOrders.map((order) => {
-                        
-                        // YAZICI GÖRÜNÜNÜRLÜK MANTIĞI 🚀
-                        // 1. Eğer tek bir fiş yazdırılıyorsa (singlePrintId), sadece o görünür.
-                        // 2. Eğer birden çok seçildiyse (selectedPrintIds), sadece seçilenler görünür.
-                        // 3. Hiçbiri yoksa (Tümünü Yazdır), hepsi görünür.
                         const isVisibleInPrint = singlePrintId ? order.id === singlePrintId : (selectedPrintIds.length === 0 || selectedPrintIds.includes(order.id));
 
                         return (
-                          <div 
-                            key={order.id} 
-                            className={`border border-gray-200 rounded-2xl p-6 ${!isVisibleInPrint ? 'print:hidden' : 'print:block'} print:border-gray-300 print:break-inside-avoid`}
-                          >
+                          <div key={order.id} className={`border border-gray-200 rounded-2xl p-6 ${!isVisibleInPrint ? 'print:hidden' : 'print:block'} print:border-gray-300 print:break-inside-avoid`}>
                             <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
-                              
                               <div className="flex items-center gap-4">
-                                {/* SEÇİM KUTUCUĞU (CHECKBOX) */}
                                 <input 
                                   type="checkbox" 
                                   checked={selectedPrintIds.includes(order.id)}
@@ -283,23 +265,12 @@ export default function CustomerDashboard() {
                                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{new Date(order.created_at).toLocaleString('tr-TR')}</p>
                                 </div>
                               </div>
-                              
                               <div className="flex items-center gap-4">
                                 <p className="text-xl font-black text-[#1B2559]">{order.total_amount} ₺</p>
-                                
-                                {/* TEKİL YAZDIR BUTONU */}
-                                <button 
-                                  onClick={() => handlePrintSingle(order.id)} 
-                                  className="print:hidden text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 p-2 rounded-xl transition-all" 
-                                  title="Sadece bu fişi yazdır"
-                                >
-                                  <Printer size={18} />
-                                </button>
+                                <button onClick={() => handlePrintSingle(order.id)} className="print:hidden text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 p-2 rounded-xl transition-all" title="Sadece bu fişi yazdır"><Printer size={18} /></button>
                               </div>
-
                             </div>
                             
-                            {/* Fişin İçindeki Ürünler */}
                             <div className="bg-gray-50 p-4 rounded-xl print:bg-transparent">
                               <div className="grid grid-cols-12 gap-2 text-[10px] font-black text-gray-400 uppercase mb-2 border-b border-gray-200 pb-2">
                                 <div className="col-span-6">Ürün Açıklaması</div>
@@ -321,7 +292,6 @@ export default function CustomerDashboard() {
                   )}
                 </div>
 
-                {/* GENEL TOPLAM (Yazıcı Dibe İtecek) */}
                 <div className="flex justify-end mt-12 pt-8 border-t-2 border-[#1B2559] print:mt-8">
                   <div className="w-full md:w-1/2 bg-gray-50 p-6 rounded-3xl border border-gray-200 print:bg-transparent print:border-none print:p-0 text-right">
                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Toplam Güncel Borç Bakiyesi</p>

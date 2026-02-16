@@ -4,27 +4,12 @@ import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  ArrowLeft, 
-  ShoppingCart, 
-  Plus, 
-  Minus, 
-  Package, 
-  Loader2, 
-  CheckCircle2, 
-  Search, 
-  Rocket, 
-  Trash2,
-  AlertCircle
+  Loader2, Search, ArrowLeft, Package, Plus, Minus, ShoppingCart, 
+  CheckCircle2, Store, LayoutDashboard, ShoppingBag, LogOut, Rocket 
 } from 'lucide-react';
 import Link from 'next/link';
 
-const borderColors = [
-  'border-blue-500/50 hover:border-blue-500',
-  'border-orange-500/50 hover:border-orange-500',
-  'border-green-500/50 hover:border-green-500',
-];
-
-export default function B2BStorePage() {
+export default function BusinessStorePage() {
   const params = useParams();
   const router = useRouter();
   const code = params?.code as string;
@@ -32,11 +17,13 @@ export default function B2BStorePage() {
 
   const [company, setCompany] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
-  const [cart, setCart] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ordering, setOrdering] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // SEPET STATE'İ
+  const [cart, setCart] = useState<any[]>([]);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,21 +32,28 @@ export default function B2BStorePage() {
 
   useEffect(() => {
     const fetchStoreData = async () => {
-      const { data: compData } = await supabase.from('companies').select('*').eq('id', companyId).single();
-      if (compData) setCompany(compData);
+      setLoading(true);
+      // İşletme Bilgisi
+      const { data: companyData } = await supabase.from('companies').select('name').eq('id', companyId).single();
+      if (companyData) setCompany(companyData);
 
-      const { data: prodData } = await supabase.from('products').select('*').eq('company_id', companyId).order('name');
-      if (prodData) setProducts(prodData);
-
+      // Ürünleri Çek (İşletmeye ait ürünler)
+      const { data: productsData } = await supabase.from('products').select('*').eq('company_id', companyId);
+      if (productsData) setProducts(productsData);
+      
       setLoading(false);
     };
+
     if (companyId) fetchStoreData();
   }, [companyId, supabase]);
 
+  // SEPET FONKSİYONLARI
   const addToCart = (product: any) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
-      if (existing) return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      if (existing) {
+        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+      }
       return [...prev, { ...product, quantity: 1 }];
     });
   };
@@ -67,156 +61,142 @@ export default function B2BStorePage() {
   const removeFromCart = (productId: string) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === productId);
-      if (existing && existing.quantity > 1) return prev.map(item => item.id === productId ? { ...item, quantity: item.quantity - 1 } : item);
+      if (existing && existing.quantity > 1) {
+        return prev.map(item => item.id === productId ? { ...item, quantity: item.quantity - 1 } : item);
+      }
       return prev.filter(item => item.id !== productId);
     });
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-  // --- GARANTİLİ HANDLE CHECKOUT FONKSİYONU ---
-  const handleCheckout = async () => {
+  // SİPARİŞİ GÖNDER (VERİTABANINA YAZ)
+  const handlePlaceOrder = async () => {
     if (cart.length === 0) return;
-    setOrdering(true);
+    setPlacingOrder(true);
     
     try {
-      // 1. 'orders' tablosuna ana kaydı atıyoruz (Hata veren 'items' sütununu da doldurarak)
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          customer_cari_code: code,
-          company_id: companyId,
-          total_amount: totalAmount,
-          status: 'Beklemede',
-          items: JSON.stringify(cart) // VERİTABANININ İSTEDİĞİ O KRİTİK SÜTUNU BURADA DOYURUYORUZ
-        }])
-        .select()
-        .single();
-
-      if (orderError) throw orderError;
-
-      // 2. 'order_items' tablosuna detayları işliyoruz
-      const orderItems = cart.map(item => ({
-        order_id: order.id,
-        product_id: item.id,
-        quantity: item.quantity,
-        unit_price: item.price
+      const itemsJson = cart.map(c => ({ 
+        id: c.id, 
+        name: c.name, 
+        quantity: c.quantity, 
+        price: c.price, 
+        unit: c.unit || 'Adet' 
       }));
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
+      const { error } = await supabase.from('orders').insert({
+        company_id: companyId,
+        customer_cari_code: code,
+        items: JSON.stringify(itemsJson),
+        total_amount: cartTotal,
+        status: 'Beklemede'
+      });
 
-      if (itemsError) throw itemsError;
+      if (error) throw error;
 
-      // Başarılı!
       setOrderSuccess(true);
       setCart([]);
+      
+      // 3 Saniye sonra siparişlerim sayfasına at
+      setTimeout(() => {
+        router.push(`/portal/${code}/orders`);
+      }, 3000);
+
     } catch (error: any) {
-      console.error("Sipariş hatası:", error);
-      alert("Hata: " + (error.message || "Sipariş kaydedilemedi."));
-    } finally {
-      setOrdering(false);
+      alert("Sipariş verilirken hata oluştu: " + error.message);
     }
+    setPlacingOrder(false);
   };
 
-  if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[#1a1a1a] gap-4">
-      <Loader2 className="animate-spin text-blue-500" size={48} />
-      <p className="text-blue-500 font-bold tracking-widest uppercase text-xs">Sistem Hazırlanıyor...</p>
-    </div>
-  );
+  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  if (orderSuccess) {
-    return (
-      <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4">
-        <div className="bg-[#242424] p-12 rounded-[48px] shadow-2xl text-center max-w-md w-full border border-gray-800/50">
-          <div className="w-24 h-24 bg-green-500/10 text-green-500 rounded-full flex items-center justify-center mx-auto mb-8">
-            <CheckCircle2 size={52} />
-          </div>
-          <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-4">Müjde Patron!</h2>
-          <p className="text-gray-400 font-medium mb-10 leading-relaxed">
-            Sipariş veritabanına başarıyla kilitlendi. Toptancınız ekranında görecektir.
-          </p>
-          <Link href={`/portal/${code}/orders`} className="w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black uppercase tracking-widest block transition-all shadow-xl shadow-blue-600/20">
-            Siparişlerim Sayfasına Git
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="h-screen flex flex-col items-center justify-center bg-[#F4F7FE] gap-4"><Loader2 className="animate-spin text-blue-600" size={48} /><p className="text-[#1B2559] font-bold uppercase tracking-widest text-xs">Mağaza Yükleniyor...</p></div>;
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] font-sans text-white pb-24 lg:pb-0">
+    <div className="min-h-screen bg-[#F4F7FE] flex font-sans">
       
-      {/* HEADER */}
-      <div className="max-w-[1600px] mx-auto pt-10 px-6 lg:px-12">
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-8 mb-12">
-          <div className="flex items-center gap-6 w-full lg:w-auto">
-            <Link href={`/portal/${code}`} className="p-4 bg-[#242424] rounded-2xl hover:bg-[#2d2d2d] transition-all border border-gray-800 flex items-center gap-3 text-sm font-black text-gray-300 uppercase tracking-widest">
-              <ArrowLeft size={20} /> Geri Dön
+      {/* SOL MENÜ */}
+      <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl z-20">
+        <div>
+          <div className="flex items-center gap-3 mb-12">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg"><Rocket className="text-white" size={22} /></div>
+            <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
+          </div>
+          <nav className="space-y-3">
+            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all"><LayoutDashboard size={22}/> Özet Panel</Link>
+            
+            {/* YENİ EKLENEN SİPARİŞ VER BUTONU (Aktif Durumda) */}
+            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg">
+               <Store size={22} /> Sipariş Ver
             </Link>
+
+            <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group"><ShoppingBag size={22} className="group-hover:text-white"/> Sipariş & Mutabakat</Link>
+          </nav>
+        </div>
+        <button onClick={async () => { await supabase.auth.signOut(); router.push('/portal'); }} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20"><LogOut size={22}/> Güvenli Çıkış</button>
+      </aside>
+
+      {/* ANA İÇERİK (Mağaza ve Sepet) */}
+      <main className="flex-1 lg:ml-72 p-6 md:p-10 flex flex-col xl:flex-row gap-8 relative">
+        
+        {/* SOL KISIM: Ürünler */}
+        <div className="flex-1 space-y-8">
+          
+          {/* Üst Başlık ve Arama */}
+          <div className="bg-white p-6 md:p-8 rounded-[40px] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
-              <h1 className="text-3xl lg:text-4xl font-black uppercase tracking-tighter text-white">
-                {company?.name || 'DENEME MAĞAZASI'}
+              <Link href={`/portal/${code}`} className="text-blue-500 hover:text-blue-700 font-bold uppercase text-xs tracking-widest flex items-center gap-2 mb-2"><ArrowLeft size={16}/> İşletmelere Dön</Link>
+              <h1 className="text-3xl font-black text-[#1B2559] uppercase tracking-tighter flex items-center gap-3">
+                <Store className="text-blue-500" size={32}/> {company?.name || 'Toptancı Mağazası'}
               </h1>
-              <p className="text-blue-400 text-xs font-black tracking-[0.3em] uppercase mt-1 opacity-70">Holding B2B Satış Portalı</p>
+            </div>
+            <div className="relative w-full md:w-80">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input 
+                type="text" 
+                placeholder="Ürün Ara..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:border-blue-500 focus:bg-white transition-all font-bold text-[#1B2559] placeholder:text-gray-400" 
+              />
             </div>
           </div>
-          
-          <div className="relative w-full lg:w-[500px]">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500" size={24} />
-            <input 
-              type="text"
-              placeholder="Ürün kataloğunda hızlı arama..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-16 pr-6 py-5 bg-[#242424] border border-gray-800 rounded-[24px] outline-none focus:border-blue-500 text-white font-bold transition-all shadow-inner"
-            />
-          </div>
-        </div>
-      </div>
 
-      <main className="max-w-[1600px] mx-auto p-6 lg:p-12 flex flex-col lg:flex-row gap-12 items-start">
-        
-        {/* ÜRÜN LİSTESİ */}
-        <div className="flex-1 w-full">
-          <div className="flex items-center justify-between mb-8 px-2">
-            <h2 className="text-2xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-              <Package className="text-blue-500" size={28} /> Mevcut Ürünler
-            </h2>
-          </div>
-
-          {filteredProducts.length === 0 ? (
-            <div className="bg-[#242424] p-24 rounded-[48px] border border-gray-800 text-center">
-              <AlertCircle size={64} className="text-gray-700 mx-auto mb-6" />
-              <p className="text-xl font-black text-gray-400 uppercase tracking-widest">Ürün Bulunamadı</p>
+          {/* Ürün Listesi */}
+          {products.length === 0 ? (
+            <div className="bg-white p-20 rounded-[40px] text-center border-2 border-dashed border-gray-200">
+              <Package size={64} className="mx-auto text-gray-200 mb-4" />
+              <h3 className="text-xl font-black text-[#1B2559] uppercase">Ürün Bulunamadı</h3>
+              <p className="text-gray-400 font-bold text-sm mt-2">İşletme henüz ürün eklememiş.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
-              {filteredProducts.map((p, index) => {
-                const borderColorClass = borderColors[index % borderColors.length];
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProducts.map(product => {
+                const cartItem = cart.find(c => c.id === product.id);
                 return (
-                  <div key={p.id} className={`bg-[#242424] p-6 rounded-[32px] border-2 ${borderColorClass} shadow-xl hover:-translate-y-2 transition-all flex flex-col justify-between group`}>
+                  <div key={product.id} className="bg-white p-6 rounded-[32px] shadow-sm hover:shadow-xl transition-all border border-gray-50 flex flex-col justify-between group">
                     <div>
-                      <div className="w-full h-56 bg-[#1a1a1a] rounded-[24px] mb-6 flex items-center justify-center text-gray-700 group-hover:text-white transition-colors">
-                        <Package size={80} strokeWidth={1} />
-                      </div>
-                      <h3 className="font-black text-white uppercase text-lg leading-tight mb-2 line-clamp-2 min-h-[56px]">{p.name}</h3>
-                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Birim: {p.unit} | Stok: {p.stock}</p>
+                      <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4"><Package size={24}/></div>
+                      <h4 className="text-lg font-black text-[#1B2559] uppercase leading-tight mb-1">{product.name}</h4>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{product.unit || 'Adet'}</p>
                     </div>
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-800">
-                      <span className="text-2xl font-black text-blue-400">{p.price.toLocaleString('tr-TR')} ₺</span>
-                      <button 
-                        onClick={() => addToCart(p)}
-                        className="p-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl transition-all shadow-lg shadow-blue-600/20"
-                      >
-                        <Plus size={24} />
-                      </button>
+                    
+                    <div className="mt-6 flex items-end justify-between">
+                      <p className="text-2xl font-black text-blue-600">{product.price} <span className="text-sm text-gray-400">₺</span></p>
+                      
+                      {/* Sepet Kontrolleri */}
+                      {cartItem ? (
+                        <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-200">
+                          <button onClick={() => removeFromCart(product.id)} className="w-8 h-8 bg-white text-red-500 rounded-xl flex items-center justify-center shadow-sm hover:bg-red-50 transition-colors"><Minus size={16}/></button>
+                          <span className="font-black text-[#1B2559] w-4 text-center">{cartItem.quantity}</span>
+                          <button onClick={() => addToCart(product)} className="w-8 h-8 bg-blue-600 text-white rounded-xl flex items-center justify-center shadow-sm hover:bg-blue-700 transition-colors"><Plus size={16}/></button>
+                        </div>
+                      ) : (
+                        <button onClick={() => addToCart(product)} className="w-12 h-12 bg-[#F4F7FE] text-blue-600 hover:bg-blue-600 hover:text-white rounded-2xl flex items-center justify-center transition-all">
+                          <Plus size={24}/>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -225,64 +205,60 @@ export default function B2BStorePage() {
           )}
         </div>
 
-        {/* SAĞ TARAF: SEPET */}
-        <div className="w-full lg:w-[450px] bg-[#242424] rounded-[48px] border border-gray-800 shadow-2xl p-10 h-fit lg:sticky lg:top-8">
-          <div className="flex items-center justify-between mb-10 pb-6 border-b border-gray-800">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-500/10 text-blue-500 rounded-2xl flex items-center justify-center">
-                <ShoppingCart size={28}/>
-              </div>
-              <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Sepetim</h2>
-            </div>
-            <span className="bg-gray-800 text-gray-400 text-xs font-black px-4 py-2 rounded-full uppercase">
-              {cart.length} Ürün
-            </span>
-          </div>
-
-          {cart.length === 0 ? (
-            <div className="text-center py-20 border-2 border-dashed border-gray-800 rounded-[32px] mb-8">
-              <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">Sepetiniz Boş</p>
-            </div>
-          ) : (
-            <div className="space-y-4 mb-10 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-              {cart.map(item => (
-                <div key={item.id} className="flex items-center justify-between bg-[#1a1a1a] p-5 rounded-[24px] border border-gray-800">
-                  <div className="flex-1 overflow-hidden">
-                    <h4 className="font-black text-white text-xs uppercase truncate pr-4">{item.name}</h4>
-                    <p className="text-blue-400 font-black text-sm mt-1">{item.price.toLocaleString('tr-TR')} ₺</p>
-                  </div>
-                  <div className="flex items-center gap-3 bg-[#242424] px-3 py-2 rounded-xl">
-                    <button onClick={() => removeFromCart(item.id)} className="text-gray-500 hover:text-red-500">
-                      {item.quantity === 1 ? <Trash2 size={14}/> : <Minus size={14}/>}
-                    </button>
-                    <span className="font-black text-white text-xs w-4 text-center">{item.quantity}</span>
-                    <button onClick={() => addToCart(item)} className="text-gray-500 hover:text-blue-500">
-                      <Plus size={14}/>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="pt-8 border-t border-gray-800">
-            <div className="flex justify-between items-end mb-10">
-              <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">TOPLAM TUTAR</p>
-              <span className="text-3xl font-black text-white">
-                {totalAmount.toLocaleString('tr-TR', { minimumFractionDigits: 2 })} ₺
-              </span>
-            </div>
+        {/* SAĞ KISIM: Sepet (Sticky Panel) */}
+        <div className="w-full xl:w-96 shrink-0 relative">
+          <div className="sticky top-10 bg-white rounded-[40px] shadow-2xl border border-gray-100 p-8 flex flex-col max-h-[calc(100vh-80px)] overflow-hidden">
             
-            <button 
-              onClick={handleCheckout} 
-              disabled={cart.length === 0 || ordering} 
-              className={`w-full py-6 rounded-3xl font-black uppercase tracking-[0.2em] flex items-center justify-center gap-4 transition-all
-                ${cart.length === 0 ? 'bg-gray-800 text-gray-600' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-2xl'}`}
-            >
-              {ordering ? <Loader2 className="animate-spin" size={28} /> : <><Rocket size={28} /> Siparişi Onayla</>}
-            </button>
+            <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-100 shrink-0">
+              <h2 className="text-2xl font-black text-[#1B2559] uppercase flex items-center gap-3"><ShoppingCart size={28} className="text-blue-500"/> Sepetim</h2>
+              <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-xs font-black">{cartItemCount} Ürün</span>
+            </div>
+
+            {/* Sepet İçeriği */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-4 pr-2">
+              {cart.length === 0 ? (
+                <div className="text-center py-10 opacity-50">
+                  <ShoppingCart size={48} className="mx-auto mb-4 text-gray-300"/>
+                  <p className="font-bold text-gray-400 uppercase text-xs">Sepetiniz Boş</p>
+                </div>
+              ) : (
+                cart.map(item => (
+                  <div key={item.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex justify-between items-center">
+                    <div className="flex-1 pr-2">
+                      <p className="font-bold text-sm text-[#1B2559] truncate">{item.name}</p>
+                      <p className="text-[10px] font-black text-gray-400 uppercase mt-1">{item.price} ₺ x {item.quantity}</p>
+                    </div>
+                    <div className="font-black text-blue-600 text-right">{(item.price * item.quantity).toLocaleString('tr-TR')} ₺</div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Alt Kısım: Toplam ve Onay */}
+            <div className="pt-6 mt-6 border-t border-gray-100 shrink-0">
+              <div className="flex justify-between items-center mb-6">
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Sipariş Toplamı</p>
+                <p className="text-3xl font-black text-[#1B2559]">{cartTotal.toLocaleString('tr-TR')} <span className="text-lg">₺</span></p>
+              </div>
+
+              {orderSuccess ? (
+                <div className="bg-green-50 text-green-600 p-4 rounded-3xl flex items-center justify-center gap-3 font-black uppercase text-sm border border-green-200">
+                  <CheckCircle2 size={24}/> Sipariş İletildi!
+                </div>
+              ) : (
+                <button 
+                  onClick={handlePlaceOrder}
+                  disabled={cart.length === 0 || placingOrder}
+                  className="w-full py-5 bg-[#3063E9] text-white font-black rounded-3xl uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:shadow-none"
+                >
+                  {placingOrder ? <Loader2 className="animate-spin" size={24} /> : "Sepeti Onayla ve Gönder"}
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
+
       </main>
     </div>
   );
