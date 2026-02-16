@@ -8,14 +8,15 @@ import {
   ShoppingBag, 
   LogOut, 
   Rocket, 
-  Store,
-  FileText,
-  AlertTriangle,
-  ShieldCheck,
-  CheckCircle2,
-  Package,
-  X,
-  Loader2
+  Store, 
+  Barcode,
+  FileText, 
+  AlertTriangle, 
+  ShieldCheck, 
+  CheckCircle2, 
+  Package, 
+  X, 
+  Loader2 
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -41,18 +42,14 @@ export default function MyOrdersPage() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) { setLoading(false); return; }
 
-            // 1. Müşteri bakiyesini çek
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('current_balance')
                 .eq('global_cari_code', code)
                 .single();
 
-            if (profile) {
-                setCurrentBalance(profile.current_balance || 0);
-            }
+            if (profile) setCurrentBalance(profile.current_balance || 0);
 
-            // 2. Siparişleri çek
             const { data: ordersData } = await supabase
                 .from('orders')
                 .select('*, companies(name)')
@@ -62,11 +59,8 @@ export default function MyOrdersPage() {
             if (ordersData) {
                 const enriched = ordersData.map(order => {
                     let parsedItems = [];
-                    try { 
-                        parsedItems = typeof order.items === 'string' ? JSON.parse(order.items) : order.items; 
-                    } catch (e) { 
-                        parsedItems = []; 
-                    }
+                    try { parsedItems = typeof order.items === 'string' ? JSON.parse(order.items) : order.items; } 
+                    catch (e) { parsedItems = []; }
                     return { ...order, parsed_items: parsedItems };
                 });
                 setOrders(enriched);
@@ -77,23 +71,16 @@ export default function MyOrdersPage() {
         if (code) fetchCustomerData();
     }, [code, supabase]);
 
-    // 🚀 ASIL SİHİR: ONAYLA VE STOKLARA İŞLE
+    // 🚀 ONAYLA VE STOKLARA İŞLE (DEVRİM)
     const handleApproveAndBill = async () => {
         setProcessing(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("Oturum hatası");
 
-            // 1. Bakiyeyi Güncelle (Borç Yaz)
             const newBalance = Number(currentBalance) + Number(selectedOrder.total_amount);
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .update({ current_balance: newBalance })
-                .eq('global_cari_code', code);
+            await supabase.from('profiles').update({ current_balance: newBalance }).eq('global_cari_code', code);
 
-            if (profileError) throw profileError;
-
-            // 2. Stokları Güncelle (Marketçinin rafına otomatik dizim)
             const itemsToProcess = selectedOrder.parsed_items;
             for (const item of itemsToProcess) {
                 const { data: existingItem } = await supabase
@@ -104,48 +91,29 @@ export default function MyOrdersPage() {
                     .maybeSingle();
 
                 if (existingItem) {
-                    // Ürün varsa miktarı artır
-                    await supabase
-                        .from('retailer_inventory')
-                        .update({ 
-                            quantity: Number(existingItem.quantity) + Number(item.quantity),
-                            cost_price: item.price 
-                        })
-                        .eq('id', existingItem.id);
+                    await supabase.from('retailer_inventory').update({ 
+                        quantity: Number(existingItem.quantity) + Number(item.quantity),
+                        cost_price: item.price 
+                    }).eq('id', existingItem.id);
                 } else {
-                    // Ürün yoksa yeni kayıt oluştur
-                    await supabase
-                        .from('retailer_inventory')
-                        .insert({
-                            owner_id: user.id,
-                            product_name: item.name,
-                            barcode: item.barcode || '',
-                            quantity: item.quantity,
-                            unit: item.unit || 'Adet',
-                            cost_price: item.price,
-                            sale_price: Number(item.price) * 1.25 // Varsayılan %25 kâr
-                        });
+                    await supabase.from('retailer_inventory').insert({
+                        owner_id: user.id,
+                        product_name: item.name,
+                        barcode: item.barcode || '',
+                        quantity: item.quantity,
+                        unit: item.unit || 'Adet',
+                        cost_price: item.price,
+                        sale_price: Number(item.price) * 1.25
+                    });
                 }
             }
 
-            // 3. Sipariş Durumunu Değiştir
-            const { error: orderError } = await supabase
-                .from('orders')
-                .update({ status: 'Tamamlandı' })
-                .eq('id', selectedOrder.id);
-
-            if (orderError) throw orderError;
-
-            // Arayüzü güncelle
+            await supabase.from('orders').update({ status: 'Tamamlandı' }).eq('id', selectedOrder.id);
             setCurrentBalance(newBalance);
             setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'Tamamlandı' } : o));
             setSelectedOrder(null);
-            
-            alert(`Başarılı!\nBorç hesabınıza işlendi ve ürünler stoklarınıza eklendi.`);
-
-        } catch (error: any) {
-            alert("Hata oluştu: " + error.message);
-        }
+            alert(`Mutabakat Sağlandı! Ürünler stoklarınıza eklendi.`);
+        } catch (error: any) { alert("Hata: " + error.message); }
         setProcessing(false);
     };
 
@@ -157,23 +125,16 @@ export default function MyOrdersPage() {
     const pendingApprovalOrders = orders.filter(o => o.status === 'Onay Bekliyor');
     const otherOrders = orders.filter(o => o.status !== 'Onay Bekliyor');
 
-    if (loading) return (
-        <div className="h-screen flex flex-col items-center justify-center bg-[#F4F7FE] gap-4">
-            <Loader2 className="animate-spin text-blue-600" size={48} />
-            <p className="text-[#1B2559] font-bold uppercase tracking-widest text-xs">Veriler Yükleniyor...</p>
-        </div>
-    );
+    if (loading) return <div className="h-screen flex flex-col items-center justify-center bg-[#F4F7FE] gap-4"><Loader2 className="animate-spin text-blue-600" size={48} /><p className="text-[#1B2559] font-bold uppercase tracking-widest text-xs">Veriler Alınıyor...</p></div>;
 
     return (
         <div className="min-h-screen bg-[#F4F7FE] flex font-sans">
             
-            {/* SOL MENÜ */}
+            {/* SOL MENÜ (Sidebar - POS Linki Eklendi) */}
             <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl">
                 <div>
                     <div className="flex items-center gap-3 mb-12">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
-                            <Rocket className="text-white" size={22} />
-                        </div>
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg"><Rocket className="text-white" size={22} /></div>
                         <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
                     </div>
                     
@@ -183,24 +144,26 @@ export default function MyOrdersPage() {
                         </Link>
                         
                         <Link href={`/portal/${code}/stores`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-                            <Store size={22} className="group-hover:text-white" /> Sipariş Ver
+                           <Store size={22} className="group-hover:text-white" /> Sipariş Ver
                         </Link>
 
-                        <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg">
-                            <ShoppingBag size={22}/> Sipariş & Mutabakat
+                        {/* AKTİF SAYFA */}
+                        <div className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg cursor-default">
+                           <ShoppingBag size={22}/> Sipariş & Mutabakat
+                        </div>
+
+                        <Link href={`/portal/${code}/pos`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
+                           <Barcode size={22} className="group-hover:text-white"/> Hızlı Satış (POS)
                         </Link>
                     </nav>
                 </div>
-                <button onClick={handleLogout} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20">
-                    <LogOut size={22}/> Güvenli Çıkış
-                </button>
+                <button onClick={handleLogout} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20"><LogOut size={22}/> Güvenli Çıkış</button>
             </aside>
 
             {/* ANA İÇERİK */}
             <main className="flex-1 lg:ml-72 p-6 md:p-12">
                 <div className="max-w-5xl mx-auto space-y-8">
                     
-                    {/* ÜST BAR VE BAKİYE */}
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-3xl font-black text-[#1B2559] uppercase tracking-tighter leading-none">Sipariş & Mutabakat</h1>
@@ -215,24 +178,18 @@ export default function MyOrdersPage() {
                         </div>
                     </div>
 
-                    {/* TURUNCU ALAN: ONAY BEKLEYENLER */}
                     {pendingApprovalOrders.length > 0 && (
-                        <div className="bg-orange-50 p-6 md:p-8 rounded-[32px] border-2 border-orange-200 shadow-sm">
-                            <h2 className="text-xl font-black text-orange-600 mb-6 uppercase flex items-center gap-2 tracking-tighter">
+                        <div className="bg-orange-50 p-8 rounded-[32px] border-2 border-orange-200">
+                            <h2 className="text-xl font-black text-orange-600 mb-6 uppercase flex items-center gap-2">
                                 <AlertTriangle size={24} /> İşletmeden Gelen Yeni Faturalar
                             </h2>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {pendingApprovalOrders.map(order => (
                                     <div key={order.id} className="bg-white p-6 rounded-3xl shadow-xl border-2 border-orange-400 relative overflow-hidden group">
-                                        <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest animate-pulse">
-                                            Onay Gerekiyor
-                                        </div>
+                                        <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] font-black px-3 py-1 rounded-bl-xl uppercase tracking-widest animate-pulse">Onay Gerekiyor</div>
                                         <h4 className="font-black text-[#1B2559] text-sm uppercase mt-2 truncate">{order.companies?.name}</h4>
                                         <p className="text-3xl font-black text-[#1B2559] mt-4 mb-6">{order.total_amount.toLocaleString('tr-TR')} ₺</p>
-                                        <button 
-                                            onClick={() => setSelectedOrder(order)}
-                                            className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-orange-500/30 transition-all flex justify-center items-center gap-2"
-                                        >
+                                        <button onClick={() => setSelectedOrder(order)} className="w-full py-4 bg-orange-500 hover:bg-orange-600 text-white font-black rounded-2xl uppercase text-[10px] shadow-lg shadow-orange-500/30 transition-all flex justify-center items-center gap-2">
                                             <FileText size={18} /> Ekstreyi İncele & Kabul Et
                                         </button>
                                     </div>
@@ -241,7 +198,6 @@ export default function MyOrdersPage() {
                         </div>
                     )}
 
-                    {/* GEÇMİŞ LİSTESİ */}
                     <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
                         <div className="p-6 border-b border-gray-50 bg-gray-50/50">
                             <h2 className="text-lg font-black text-[#1B2559] uppercase tracking-tighter">Tüm İşlem Geçmişi</h2>
@@ -249,7 +205,7 @@ export default function MyOrdersPage() {
                         {otherOrders.length === 0 ? (
                             <div className="p-20 text-center">
                                 <ShoppingBag size={48} className="mx-auto text-gray-200 mb-4 opacity-30" />
-                                <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Henüz bir kayıt bulunmuyor.</p>
+                                <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Kayıt bulunamadı.</p>
                             </div>
                         ) : (
                             <div className="divide-y divide-gray-50">
@@ -263,8 +219,8 @@ export default function MyOrdersPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-6">
-                                            <div className="text-right">
-                                                <p className="text-xs font-bold text-gray-400 uppercase">Tutar</p>
+                                            <div className="text-right mr-4">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase">Tutar</p>
                                                 <p className="font-black text-[#1B2559] text-lg">{order.total_amount.toLocaleString('tr-TR')} ₺</p>
                                             </div>
                                             <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest w-32 text-center ${
@@ -281,59 +237,37 @@ export default function MyOrdersPage() {
                         )}
                     </div>
 
-                    {/* MODAL: SİPARİŞ İNCELEME */}
                     {selectedOrder && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1B2559]/80 backdrop-blur-md">
                             <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                                
                                 <div className="bg-orange-500 p-8 text-white text-center relative shrink-0">
-                                    <button onClick={() => setSelectedOrder(null)} className="absolute top-6 right-6 hover:bg-white/20 p-2 rounded-full transition-colors">
-                                        <X size={20}/>
-                                    </button>
+                                    <button onClick={() => setSelectedOrder(null)} className="absolute top-6 right-6 hover:bg-white/20 p-2 rounded-full transition-colors"><X size={20}/></button>
                                     <ShieldCheck size={48} className="mx-auto mb-4 opacity-90" />
                                     <h2 className="text-2xl font-black uppercase tracking-widest">Mal Kabul & Mutabakat</h2>
-                                    <p className="text-orange-100 text-[10px] font-bold mt-2 uppercase">Kabul ettiğiniz an ürünler otomatik stoklarınıza eklenecektir.</p>
+                                    <p className="text-orange-100 text-[10px] font-bold mt-2 uppercase text-center">Onayladığınızda ürünler otomatik stoklarınıza eklenecektir.</p>
                                 </div>
-
                                 <div className="p-8 overflow-y-auto custom-scrollbar flex-1 bg-gray-50/50">
                                     <div className="space-y-3">
                                         {selectedOrder.parsed_items.map((item: any, idx: number) => (
                                             <div key={idx} className="flex justify-between items-center bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
                                                 <div className="flex-1">
                                                     <p className="font-bold text-sm text-[#1B2559]">{item.name}</p>
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase mt-1">
-                                                        {item.quantity} {item.unit || 'Adet'} x {item.price.toLocaleString('tr-TR')} ₺
-                                                    </p>
+                                                    <p className="text-[10px] font-black text-gray-400 uppercase mt-1">{item.quantity} {item.unit} x {item.price} ₺</p>
                                                 </div>
-                                                <div className="font-black text-blue-600 text-lg">
-                                                    {((item.quantity || 0) * (item.price || 0)).toLocaleString('tr-TR')} ₺
-                                                </div>
+                                                <div className="font-black text-blue-600 text-lg">{((item.quantity || 0) * (item.price || 0)).toLocaleString('tr-TR')} ₺</div>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-
                                 <div className="p-8 bg-white border-t border-gray-100 shrink-0">
                                     <div className="flex justify-between items-center mb-8 bg-gray-50 p-6 rounded-3xl border border-gray-200">
                                         <div>
                                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Yeni Genel Toplam</p>
-                                            <p className="text-4xl font-black text-[#1B2559]">
-                                                {selectedOrder.total_amount.toLocaleString('tr-TR')} <span className="text-xl">₺</span>
-                                            </p>
+                                            <p className="text-4xl font-black text-[#1B2559]">{selectedOrder.total_amount.toLocaleString('tr-TR')} <span className="text-xl">₺</span></p>
                                         </div>
                                     </div>
-                                    
-                                    <button 
-                                        onClick={handleApproveAndBill}
-                                        disabled={processing}
-                                        className="w-full py-5 bg-[#3063E9] text-white font-black rounded-3xl uppercase tracking-widest shadow-2xl shadow-blue-500/40 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 text-sm"
-                                    >
-                                        {processing ? <Loader2 className="animate-spin" size={24} /> : (
-                                            <>
-                                                <CheckCircle2 size={24} /> 
-                                                Kabul Et ve Stoklarıma İşle
-                                            </>
-                                        )}
+                                    <button onClick={handleApproveAndBill} disabled={processing} className="w-full py-5 bg-[#3063E9] text-white font-black rounded-3xl uppercase tracking-widest shadow-2xl shadow-blue-500/40 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 text-sm">
+                                        {processing ? <Loader2 className="animate-spin" size={24} /> : <><CheckCircle2 size={24} /> Ekstreyi Onayla ve Stoklarıma İşle</>}
                                     </button>
                                 </div>
                             </div>
