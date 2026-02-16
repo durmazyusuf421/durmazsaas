@@ -109,7 +109,7 @@ export default function MyOrdersPage() {
     return (
         <div className="min-h-screen bg-[#F4F7FE] flex font-sans">
             
-            {/* SOL MENÜ (Sidebar - Dashboard ile tamamen aynı ve şık) */}
+            {/* SOL MENÜ */}
             <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl">
                 <div>
                 <div className="flex items-center gap-3 mb-12">
@@ -117,13 +117,13 @@ export default function MyOrdersPage() {
                     <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
                 </div>
                 
-                {/* NAVİGASYON: Sipariş & Mutabakat Aktif */}
                 <nav className="space-y-3">
                     <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
                         <LayoutDashboard size={22} className="group-hover:text-white"/> Özet Panel
                     </Link>
                     
-                    <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
+                    {/* LİNK GÜNCELLENDİ: /stores */}
+                    <Link href={`/portal/${code}/stores`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
                         <Store size={22} className="group-hover:text-white" /> Sipariş Ver
                     </Link>
 

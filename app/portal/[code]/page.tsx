@@ -117,13 +117,13 @@ export default function CustomerDashboard() {
             <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
           </div>
           
-          {/* GÜNCELLENMİŞ NAVİGASYON (Sipariş Ver Eklendi) */}
           <nav className="space-y-3">
             <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg">
               <LayoutDashboard size={22}/> Özet Panel
             </Link>
             
-            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
+            {/* LİNK GÜNCELLENDİ: /stores */}
+            <Link href={`/portal/${code}/stores`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
                <Store size={22} className="group-hover:text-white" /> Sipariş Ver
             </Link>
 
