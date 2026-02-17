@@ -4,35 +4,21 @@ import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  FileText, 
-  LogOut, 
-  Loader2, 
-  Building2, 
-  Store, 
-  UserCircle, 
-  Rocket, 
-  Printer, 
-  X, 
-  History, 
-  CheckCircle2, 
-  Barcode 
+  LayoutDashboard, ShoppingBag, FileText, LogOut, Loader2, Store, 
+  UserCircle, Rocket, Barcode, Bell, Settings, Menu, X, Activity, 
+  Map as MapIcon, ChevronRight, Search
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function CustomerDashboard() {
+export default function FullyResponsiveDashboard() {
   const params = useParams();
   const router = useRouter();
   const code = params?.code as string;
   
   const [profile, setProfile] = useState<any>(null);
-  const [linkedBusinesses, setLinkedBusinesses] = useState<any[]>([]);
-  const [allOrders, setAllOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [statementModalOpen, setStatementModalOpen] = useState(false);
-  const [selectedBusiness, setSelectedBusiness] = useState<any>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobil Menü Kontrolü
+  const [selectedCity, setSelectedCity] = useState('Konya');
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,270 +26,254 @@ export default function CustomerDashboard() {
   );
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
+    const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/portal'); return; }
-
-      try {
-        // 1. Profil Bilgileri (Global Cari Kodu Üzerinden)
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('global_cari_code', code)
-          .single();
-        if (profileData) setProfile(profileData);
-
-        // 2. Bağlı Toptancılar
-        const { data: businesses } = await supabase
-          .from('customers')
-          .select('id, created_at, company_id, companies(name)')
-          .eq('current_cari_code', code);
-        if (businesses) setLinkedBusinesses(businesses);
-
-        // 3. Sipariş Geçmişi (Bakiye ve Ekstre Hesaplama İçin)
-        const { data: orders } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('customer_cari_code', code)
-          .order('created_at', { ascending: false });
-          
-        if (orders) {
-          const parsedOrders = orders.map(o => {
-            let items = [];
-            try { items = typeof o.items === 'string' ? JSON.parse(o.items) : o.items; } 
-            catch (e) { items = []; }
-            return { ...o, parsed_items: items };
-          });
-          setAllOrders(parsedOrders);
-        }
-      } catch (error) {
-        console.error("Veri yükleme hatası:", error);
-      } finally {
-        setLoading(false);
-      }
+      const { data: profileData } = await supabase.from('profiles').select('*').eq('global_cari_code', code).single();
+      if (profileData) setProfile(profileData);
+      setLoading(false);
     };
-
-    if (code) fetchDashboardData();
-  }, [code, supabase, router]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push('/portal');
-  };
-
-  const calculateBalanceForBusiness = (companyId: string) => {
-    const businessOrders = allOrders.filter(o => o.company_id === companyId && o.status === 'Tamamlandı');
-    return businessOrders.reduce((sum, order) => sum + Number(order.total_amount), 0);
-  };
-
-  const openStatement = (business: any) => {
-    setSelectedBusiness(business);
-    setStatementModalOpen(true);
-  };
+    fetchData();
+  }, [code]);
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[#F4F7FE] gap-4">
-      <Loader2 className="animate-spin text-[#3063E9]" size={48} />
-      <p className="text-[#1B2559] font-bold uppercase tracking-widest text-xs">DurmazSaaS Hazırlanıyor...</p>
+    <div className="h-screen bg-[#0B0E14] flex items-center justify-center">
+      <Loader2 className="animate-spin text-[#BC13FE]" size={48} />
     </div>
   );
 
-  const statementOrders = selectedBusiness 
-    ? allOrders.filter(o => o.company_id === selectedBusiness.company_id && o.status === 'Tamamlandı') 
-    : [];
-
   return (
-    <div className="min-h-screen bg-[#F4F7FE] flex font-sans print:bg-white print:p-0">
+    <div className="min-h-screen bg-[#0B0E14] text-white font-sans selection:bg-[#BC13FE]/30 overflow-x-hidden">
       
-      {/* SOL MENÜ (Sidebar) */}
-      <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl print:hidden">
-        <div>
-          <div className="flex items-center gap-3 mb-12">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
-              <Rocket className="text-white" size={22} />
+      {/* --- SIDEBAR (RESPONSIVE) --- */}
+      {/* Mobil Arka Plan Karartma */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      <aside className={`
+        fixed top-0 left-0 h-full w-72 bg-[#0F1219] border-r border-white/5 p-8 flex flex-col z-[70] transition-transform duration-300
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
+      `}>
+        <div className="flex items-center justify-between mb-12">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-[#3063E9] to-[#BC13FE] rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(188,19,254,0.3)]">
+              <Rocket size={22} />
             </div>
-            <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
+            <span className="text-xl font-black tracking-tighter uppercase italic">Durmaz<span className="text-[#BC13FE]">SaaS</span></span>
           </div>
-          
-          <nav className="space-y-3">
-            {/* AKTİF SAYFA: ÖZET PANEL */}
-            <div className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg cursor-default">
-              <LayoutDashboard size={22}/> Özet Panel
-            </div>
-            
-            <Link href={`/portal/${code}/stores`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-               <Store size={22} className="group-hover:text-white" /> Sipariş Ver
-            </Link>
-
-            <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-              <ShoppingBag size={22} className="group-hover:text-white"/> Sipariş & Mutabakat
-            </Link>
-
-            {/* YENİ EKLENEN: HIZLI SATIŞ (POS) */}
-            <Link href={`/portal/${code}/pos`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-              <Barcode size={22} className="group-hover:text-white"/> Hızlı Satış (POS)
-            </Link>
-          </nav>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-gray-500"><X /></button>
         </div>
-        
-        <button onClick={handleLogout} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20">
-          <LogOut size={22}/> Güvenli Çıkış
+
+        <nav className="space-y-2 flex-1">
+          <button className="w-full flex items-center gap-4 px-5 py-4 bg-gradient-to-r from-[#BC13FE]/20 to-transparent border-l-4 border-[#BC13FE] text-white rounded-r-xl font-bold transition-all">
+            <LayoutDashboard size={20} className="text-[#BC13FE]"/> Ana Sayfa
+          </button>
+          
+          <Link href={`/portal/${code}/stores`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl font-bold transition-all group">
+            <Store size={20} className="group-hover:text-[#BC13FE]" /> Sipariş Ver
+          </Link>
+
+          <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl font-bold transition-all group">
+            <ShoppingBag size={20} className="group-hover:text-[#BC13FE]" /> Sipariş & Mutabakat
+          </Link>
+
+          <Link href={`/portal/${code}/pos`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl font-bold transition-all group">
+            <Barcode size={20} className="group-hover:text-[#BC13FE]" /> Hızlı Satış (POS)
+          </Link>
+        </nav>
+
+        <button onClick={() => supabase.auth.signOut().then(() => router.push('/portal'))} className="mt-auto flex items-center gap-4 px-5 py-4 text-red-500/50 hover:text-red-500 border border-red-500/10 rounded-xl font-bold transition-all">
+          <LogOut size={20}/> Güvenli Çıkış
         </button>
       </aside>
 
-      {/* ANA İÇERİK ALANI */}
-      <main className="flex-1 lg:ml-72 p-6 md:p-12 print:m-0 print:p-0">
-        <div className="max-w-6xl mx-auto space-y-10 print:hidden">
-          
-          {/* ÜST KARŞILAMA KARTI */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-8 rounded-[40px] shadow-sm border border-white gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-16 h-16 bg-blue-50 rounded-3xl flex items-center justify-center text-blue-600">
-                <UserCircle size={40} />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black text-[#1B2559] uppercase tracking-tighter leading-none">
-                  {profile?.full_name || 'Müşteri'}
-                </h1>
-                <p className="text-blue-500 font-bold text-xs mt-2 tracking-widest uppercase">Global Cari Kodu: {code}</p>
-              </div>
-            </div>
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Hesap Durumu</span>
-              <span className="bg-green-50 text-green-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase border border-green-100">Aktif Kullanıcı</span>
-            </div>
+      {/* --- ANA İÇERİK --- */}
+      <main className={`transition-all duration-300 ${isSidebarOpen ? 'blur-sm' : ''} lg:ml-72 p-4 md:p-8 lg:p-10`}>
+        
+        {/* TOP BAR */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-3 bg-[#0F1219] rounded-xl border border-white/5"
+            >
+              <Menu size={20} />
+            </button>
+            <h2 className="text-xl md:text-3xl font-black tracking-tight uppercase">Ana Sayfa</h2>
           </div>
-
-          {/* İŞ ORTAKLARI LİSTESİ */}
-          <div className="space-y-6">
-             <div className="flex items-center justify-between px-2">
-                <h2 className="text-2xl font-black text-[#1B2559] uppercase tracking-tighter flex items-center gap-3">
-                    <Store size={28} className="text-blue-500" /> Toptancı Bakiyelerim
-                </h2>
-             </div>
-
-             {linkedBusinesses.length === 0 ? (
-                <div className="bg-white p-20 rounded-[50px] border-2 border-dashed border-gray-100 text-center">
-                    <Store size={48} className="mx-auto text-gray-200 mb-4 opacity-50"/>
-                    <h3 className="text-xl font-black text-[#1B2559] uppercase">Henüz bir işletmeye bağlı değilsiniz.</h3>
-                </div>
-             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {linkedBusinesses.map((b, index) => {
-                      const balance = calculateBalanceForBusiness(b.company_id);
-                      return (
-                        <div key={index} className="bg-white p-8 rounded-[40px] shadow-sm hover:shadow-xl transition-all border border-gray-50 flex flex-col justify-between group">
-                          <div className="flex justify-between items-start mb-6">
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 bg-gray-50 text-blue-500 rounded-2xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-all">
-                                  <Building2 size={24}/>
-                                </div>
-                                <div>
-                                    <h4 className="text-xl font-black text-[#1B2559] uppercase leading-tight">{b.companies?.name}</h4>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">İş Ortağı</p>
-                                </div>
-                            </div>
-                            <Link href={`/portal/${code}/store/${b.company_id}`} className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-all">
-                              <ShoppingBag size={18}/>
-                            </Link>
-                          </div>
-                          
-                          <div className="bg-[#F4F7FE] p-6 rounded-[30px] flex items-center justify-between border border-blue-50/50">
-                            <div>
-                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Toplam Borç</p>
-                              <p className="text-2xl font-black text-[#1B2559]">{balance.toLocaleString('tr-TR')} ₺</p>
-                            </div>
-                            <button 
-                              onClick={() => openStatement(b)}
-                              className="bg-white px-5 py-3 rounded-2xl text-[10px] font-black text-blue-600 uppercase tracking-widest hover:bg-blue-600 hover:text-white border border-blue-100 transition-all flex items-center gap-2 shadow-sm"
-                            >
-                              <History size={16} /> Ekstre
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                </div>
-             )}
+          
+          <div className="flex items-center gap-3 md:gap-6">
+            {/* Bildirim İkonu (Mobilde Gizlenebilir) */}
+            <div className="hidden sm:flex bg-[#0F1219] p-3 rounded-xl border border-white/5 text-gray-500 relative">
+              <Bell size={20} />
+              <span className="absolute top-3 right-3 w-2 h-2 bg-[#BC13FE] rounded-full"></span>
+            </div>
+            {/* Profil */}
+            <div className="flex items-center gap-3 bg-[#0F1219] p-1.5 md:p-2 rounded-2xl border border-white/5">
+              <div className="hidden md:block text-right px-2">
+                <p className="text-[10px] font-black uppercase leading-none">{profile?.full_name}</p>
+                <p className="text-[8px] text-gray-500 font-bold mt-1 tracking-widest">{code}</p>
+              </div>
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-[#BC13FE]/20 to-[#3063E9]/20 rounded-xl flex items-center justify-center border border-white/5">
+                <UserCircle size={20} className="text-[#BC13FE]" />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* --- YAZDIRILABİLİR EKSTRE MODALI --- */}
-        {statementModalOpen && selectedBusiness && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-[#1B2559]/80 backdrop-blur-md print:static print:bg-white print:p-0 print:block">
-            <div className="bg-white w-full max-w-4xl h-full md:h-auto md:max-h-[90vh] rounded-none md:rounded-[40px] shadow-2xl flex flex-col print:shadow-none print:w-full print:h-auto overflow-hidden">
-              
-              {/* Modal Header */}
-              <div className="bg-blue-600 p-6 flex justify-between items-center print:hidden shrink-0">
-                <h2 className="text-white font-black uppercase tracking-widest flex items-center gap-3">
-                  <FileText /> Cari Hesap Ekstresi
-                </h2>
-                <div className="flex items-center gap-3">
-                  <button onClick={() => window.print()} className="bg-white/20 p-2 rounded-xl text-white hover:bg-white/30 transition-all">
-                    <Printer size={20} />
-                  </button>
-                  <button onClick={() => setStatementModalOpen(false)} className="text-white bg-blue-700 p-2 rounded-xl hover:bg-blue-800">
-                    <X size={20} />
-                  </button>
+        {/* DASHBOARD GRID */}
+        <div className="grid grid-cols-12 gap-6 lg:gap-8">
+          
+          {/* HARİTA VE ANA DURUM (SOL/ÜST) */}
+          <div className="col-span-12 lg:col-span-8 space-y-6 lg:space-y-8">
+            
+            {/* CANLI KROKİ KARTI */}
+            <div className="bg-[#0F1219] rounded-[30px] border border-white/5 overflow-hidden relative min-h-[400px] flex flex-col">
+              <div className="p-6 md:p-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 z-10">
+                <div>
+                  <h3 className="text-base md:text-lg font-black uppercase tracking-tighter">Durmazsaas - {selectedCity} Ağı</h3>
+                  <div className="flex items-center gap-2 text-[8px] md:text-[10px] text-[#BC13FE] font-black uppercase tracking-widest mt-1">
+                    <span className="w-2 h-2 bg-[#BC13FE] rounded-full animate-pulse"></span> Canlı Veri Akışı
+                  </div>
                 </div>
+                <select 
+                  value={selectedCity}
+                  onChange={(e) => setSelectedCity(e.target.value)}
+                  className="w-full sm:w-auto bg-[#1B202A] border border-white/10 text-[10px] font-bold px-4 py-2 rounded-xl focus:border-[#BC13FE] transition-colors"
+                >
+                  <option value="Konya">Konya Bağlantı Ağı</option>
+                  <option value="İstanbul">İstanbul Bağlantı Ağı</option>
+                  <option value="Ankara">Ankara Bağlantı Ağı</option>
+                </select>
               </div>
-              
-              {/* Modal Body / Printable Content */}
-              <div className="p-10 md:p-16 overflow-y-auto flex-1 bg-white print:p-0 print:overflow-visible custom-scrollbar">
-                 <div className="border-b-2 border-gray-200 pb-8 mb-10 flex justify-between items-start">
-                    <div>
-                      <h1 className="text-4xl font-black text-[#1B2559] uppercase tracking-tighter">{selectedBusiness.companies?.name}</h1>
-                      <p className="text-gray-400 font-bold uppercase tracking-widest mt-2 text-xs italic">Cari Hesap Mutabakat Cetveli</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xl font-black text-[#1B2559] uppercase leading-none">{profile?.full_name}</p>
-                      <p className="text-xs font-bold text-gray-400 mt-2 uppercase">Cari Kodu: {code}</p>
-                      <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase">Belge Tarihi: {new Date().toLocaleDateString('tr-TR')}</p>
-                    </div>
-                 </div>
 
-                 {/* İşlem Satırları */}
-                 <div className="space-y-4">
-                    <div className="grid grid-cols-12 gap-4 px-6 py-3 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-100">
-                      <div className="col-span-3">İşlem Tarihi</div>
-                      <div className="col-span-6">İşlem Açıklaması</div>
-                      <div className="col-span-3 text-right">Tutar</div>
-                    </div>
-                    
-                    {statementOrders.length === 0 ? (
-                      <div className="py-20 text-center border-2 border-dashed border-gray-50 rounded-[30px]">
-                        <p className="text-gray-300 font-bold uppercase text-xs">Bu cari hesaba ait onaylanmış işlem bulunamadı.</p>
-                      </div>
-                    ) : (
-                      statementOrders.map((order, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-4 px-6 py-5 bg-gray-50/50 rounded-2xl text-sm font-bold text-[#1B2559] border border-gray-50">
-                          <div className="col-span-3 text-xs text-gray-500">{new Date(order.created_at).toLocaleDateString('tr-TR')}</div>
-                          <div className="col-span-6 uppercase text-xs tracking-tight">Sipariş Onayı - İşlem No: {order.id.slice(0,8)}</div>
-                          <div className="col-span-3 text-right text-blue-600">{order.total_amount.toLocaleString('tr-TR')} ₺</div>
-                        </div>
-                      ))
-                    )}
-                 </div>
+              {/* KROKİ ALANI (RESPONSIVE SVG/IMAGE) */}
+              <div className="flex-1 relative bg-[#0B0E14] flex items-center justify-center p-10 overflow-hidden">
+                <div className="absolute inset-0 opacity-5 bg-[radial-gradient(#BC13FE_1px,transparent_1px)] [background-size:30px_30px]"></div>
+                
+                {/* Core Visual */}
+                <div className="relative">
+                  <div className="absolute inset-0 bg-[#BC13FE]/20 blur-[100px] rounded-full"></div>
+                  <div className="w-16 h-16 md:w-24 md:h-24 border-2 border-[#BC13FE]/50 rounded-full flex items-center justify-center relative animate-spin-slow">
+                    <div className="w-2 h-2 bg-[#BC13FE] rounded-full absolute -top-1 shadow-[0_0_15px_#BC13FE]"></div>
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center font-black text-xs md:text-lg italic uppercase tracking-widest text-white/80">
+                    Durmaz
+                  </div>
+                </div>
 
-                 {/* Toplam Bakiye */}
-                 <div className="mt-12 pt-8 border-t-2 border-[#1B2559] flex justify-end">
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-gray-400 uppercase mb-2 tracking-[0.2em]">Net Borç Bakiyesi</p>
-                      <p className="text-5xl font-black text-[#1B2559]">
-                        {calculateBalanceForBusiness(selectedBusiness.company_id).toLocaleString('tr-TR')} <span className="text-2xl text-blue-600">₺</span>
-                      </p>
-                    </div>
-                 </div>
+                {/* Bağlantı Noktaları (Mobilde Sadelestirilmis) */}
+                <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-500 rounded-full shadow-[0_0_10px_#3063E9]"></div>
+                <div className="absolute bottom-1/4 right-1/3 w-2 h-2 bg-[#BC13FE] rounded-full shadow-[0_0_10px_#BC13FE]"></div>
+              </div>
+            </div>
 
-                 {/* Alt Not (Sadece Print'te Görünür) */}
-                 <div className="hidden print:block mt-20 pt-10 border-t border-gray-100">
-                   <p className="text-[9px] text-gray-400 font-medium uppercase text-center tracking-widest">Bu belge DurmazSaaS altyapısı ile otomatik olarak oluşturulmuştur. Mutabakat için lütfen işletme ile iletişime geçiniz.</p>
-                 </div>
+            {/* HABERLER (SCROLLABLE) */}
+            <div className="bg-[#0F1219] p-6 md:p-8 rounded-[30px] border border-white/5">
+              <h4 className="font-black uppercase tracking-widest text-xs mb-6">Sistem Haberleri</h4>
+              <div className="space-y-4">
+                {[1, 2].map(i => (
+                  <div key={i} className="flex items-center gap-4 p-4 bg-white/5 rounded-2xl border border-white/5 hover:border-[#BC13FE]/30 transition-all cursor-pointer group">
+                    <div className="w-10 h-10 bg-gradient-to-br from-[#BC13FE]/10 to-transparent rounded-xl flex items-center justify-center text-[#BC13FE]">
+                      <Activity size={18} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[11px] font-bold">Yeni Lojistik Noktası Eklendi: {selectedCity}</p>
+                      <p className="text-[9px] text-gray-500 font-bold uppercase mt-0.5">2 Dakika Önce</p>
+                    </div>
+                    <ChevronRight size={16} className="text-gray-700 group-hover:text-white" />
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        )}
+
+          {/* SAĞ KOLON (STATİSTİKLER VE AKSİYONLAR) */}
+          <div className="col-span-12 lg:col-span-4 space-y-6 lg:space-y-8">
+            
+            {/* HIZLI AKSİYONLAR GRID */}
+            <div className="bg-[#0F1219] p-6 md:p-8 rounded-[30px] border border-white/5">
+              <h4 className="font-black uppercase tracking-widest text-xs mb-6">Hızlı Menü</h4>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { icon: <Store />, label: 'Marketler', color: 'text-blue-500' },
+                  { icon: <ShoppingBag />, label: 'Siparişler', color: 'text-purple-500' },
+                  { icon: <Barcode />, label: 'POS Satış', color: 'text-[#BC13FE]' },
+                  { icon: <FileText />, label: 'Faturalar', color: 'text-orange-500' }
+                ].map((item, idx) => (
+                  <button key={idx} className="bg-white/5 border border-white/5 p-4 rounded-[25px] hover:bg-white/10 transition-all flex flex-col items-center gap-3">
+                    <div className={`${item.color} bg-white/5 p-3 rounded-xl`}>{item.icon}</div>
+                    <span className="text-[9px] font-black uppercase tracking-[0.2em]">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* CANLI TRAFİK (GRAFİK) */}
+            <div className="bg-[#0F1219] p-6 md:p-8 rounded-[30px] border border-white/5">
+              <div className="flex justify-between items-center mb-6">
+                <h4 className="font-black uppercase tracking-widest text-[10px] text-gray-500">Ağ Yoğunluğu</h4>
+                <span className="text-[10px] font-black text-green-500 animate-pulse">LIVE</span>
+              </div>
+              <div className="h-24 w-full flex items-end gap-1.5 px-2">
+                {[40, 60, 45, 90, 100, 80, 55, 70, 85, 50, 65, 95].map((h, i) => (
+                  <div key={i} className="flex-1 bg-gradient-to-t from-[#BC13FE]/20 to-[#BC13FE] rounded-t-sm transition-all duration-1000" style={{ height: `${h}%` }}></div>
+                ))}
+              </div>
+              <div className="flex justify-between mt-4 text-[8px] font-black text-gray-600 uppercase">
+                <span>08:00</span>
+                <span>14:00</span>
+                <span>20:00</span>
+              </div>
+            </div>
+
+            {/* BÖLGESEL VERİLER (PROGRESS) */}
+            <div className="bg-[#0F1219] p-6 md:p-8 rounded-[30px] border border-white/5">
+              <h4 className="font-black uppercase tracking-widest text-[10px] text-gray-500 mb-6">Aktif Bölge Kullanımı</h4>
+              <div className="space-y-5">
+                {[
+                  { name: 'Karatay', value: 88, color: 'bg-[#BC13FE]' },
+                  { name: 'Selçuklu', value: 65, color: 'bg-blue-500' },
+                  { name: 'Meram', value: 42, color: 'bg-cyan-500' }
+                ].map((b) => (
+                  <div key={b.name}>
+                    <div className="flex justify-between text-[10px] font-black uppercase mb-2 tracking-widest">
+                      <span>{b.name}</span>
+                      <span className="text-white/50">%{b.value}</span>
+                    </div>
+                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                      <div className={`h-full ${b.color} shadow-[0_0_10px_rgba(188,19,254,0.5)]`} style={{ width: `${b.value}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
       </main>
+
+      {/* MODAL CSS - Animasyonlar */}
+      <style jsx global>{`
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 12s linear infinite;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #BC13FE33;
+          border-radius: 10px;
+        }
+      `}</style>
     </div>
   );
 }

@@ -4,23 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  LogOut, 
-  Loader2, 
-  Store, 
-  ShoppingCart, 
-  Rocket, 
-  ArrowLeft, 
-  Plus, 
-  Minus, 
-  CheckCircle2,
-  Barcode,
-  PackageSearch
+  LayoutDashboard, ShoppingBag, LogOut, Loader2, Store, 
+  ShoppingCart, Rocket, ArrowLeft, Plus, Minus, CheckCircle2,
+  Barcode, PackageSearch, Menu, X
 } from 'lucide-react';
 import Link from 'next/link';
 
-export default function StoreProductsPage() {
+export default function NeonStoreProductsPage() {
   const params = useParams();
   const router = useRouter();
   const code = params?.code as string;
@@ -31,6 +21,7 @@ export default function StoreProductsPage() {
   const [cart, setCart] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,33 +32,20 @@ export default function StoreProductsPage() {
     const fetchStoreData = async () => {
       if (!companyId) return;
       try {
-        // 1. Toptancı Bilgilerini Çek
-        const { data: comp } = await supabase
-          .from('companies')
-          .select('name')
-          .eq('id', companyId)
-          .single();
+        const { data: comp } = await supabase.from('companies').select('name').eq('id', companyId).single();
         if (comp) setCompany(comp);
 
-        // 2. Bu Toptancıya Ait Ürünleri Çek
-        const { data: prods } = await supabase
-          .from('products')
-          .select('*')
-          .eq('company_id', companyId)
-          .order('name', { ascending: true });
+        const { data: prods } = await supabase.from('products').select('*').eq('company_id', companyId).order('name', { ascending: true });
         if (prods) setProducts(prods);
-
       } catch (error) {
         console.error("Mağaza verisi çekilemedi:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchStoreData();
   }, [companyId, supabase]);
 
-  // Sepet Güncelleme Fonksiyonu
   const updateQuantity = (product: any, delta: number) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
@@ -83,7 +61,6 @@ export default function StoreProductsPage() {
 
   const calculateTotal = () => cart.reduce((sum, item) => sum + (Number(item.price) * item.quantity), 0);
 
-  // Siparişi Toptancıya Gönder
   const handleSendOrder = async () => {
     if (cart.length === 0) return;
     setSending(true);
@@ -93,188 +70,188 @@ export default function StoreProductsPage() {
         customer_cari_code: code,
         items: JSON.stringify(cart),
         total_amount: calculateTotal(),
-        status: 'Beklemede' // Toptancı panelinde 'Beklemede' olarak görünecek
+        status: 'Beklemede'
       });
-
       if (error) throw error;
       
-      alert(`Siparişiniz ${company?.name} işletmesine başarıyla iletildi!`);
+      alert(`Siparişiniz ${company?.name} işletmesine neon hızıyla iletildi!`);
       router.push(`/portal/${code}/orders`);
     } catch (error: any) {
-      alert("Sipariş gönderilirken hata oluştu: " + error.message);
+      alert("Hata: " + error.message);
     } finally {
       setSending(false);
     }
   };
 
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[#F4F7FE] gap-4">
-      <Loader2 className="animate-spin text-[#3063E9]" size={48} />
-      <p className="text-[#1B2559] font-bold uppercase tracking-widest text-xs">Ürünler Hazırlanıyor...</p>
+    <div className="h-screen bg-[#0B0E14] flex flex-col items-center justify-center">
+      <Loader2 className="animate-spin text-[#BC13FE]" size={48} />
+      <p className="text-white/50 font-bold uppercase tracking-widest text-xs mt-4">Ürünler Yükleniyor...</p>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#F4F7FE] flex font-sans">
+    <div className="min-h-screen bg-[#0B0E14] text-white font-sans selection:bg-[#BC13FE]/30 overflow-x-hidden">
       
-      {/* SOL MENÜ (Sidebar - Tasarım Bütünlüğü İçin) */}
-      <aside className="w-72 bg-[#1B2559] text-white p-8 flex-col justify-between hidden lg:flex fixed h-full shadow-2xl">
-        <div>
-          <div className="flex items-center gap-3 mb-12">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl flex items-center justify-center shadow-lg">
-              <Rocket className="text-white" size={22} />
-            </div>
-            <span className="text-2xl font-black tracking-tighter uppercase italic text-white">Durmaz<span className="text-blue-500">SaaS</span></span>
+      {/* --- SIDEBAR (RESPONSIVE) --- */}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
+      <aside className={`fixed top-0 left-0 h-full w-72 bg-[#0F1219] border-r border-white/5 p-8 flex flex-col z-[70] transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+        <div className="flex items-center justify-between mb-12">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-[#3063E9] to-[#BC13FE] rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(188,19,254,0.3)]"><Rocket size={22} /></div>
+            <span className="text-xl font-black tracking-tighter uppercase italic">Durmaz<span className="text-[#BC13FE]">SaaS</span></span>
           </div>
-          
-          <nav className="space-y-3">
-            <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-              <LayoutDashboard size={22} className="group-hover:text-white"/> Özet Panel
-            </Link>
-            
-            <div className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9] text-white rounded-2xl font-bold transition-all shadow-lg">
-               <Store size={22} /> Sipariş Ver
-            </div>
-
-            <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-              <ShoppingBag size={22} className="group-hover:text-white"/> Sipariş & Mutabakat
-            </Link>
-
-            <Link href={`/portal/${code}/pos`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-400 hover:bg-white/5 hover:text-white rounded-2xl font-bold transition-all group">
-              <Barcode size={22} className="group-hover:text-white"/> Hızlı Satış (POS)
-            </Link>
-          </nav>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-gray-500"><X /></button>
         </div>
-        <button onClick={() => supabase.auth.signOut().then(() => router.push('/portal'))} className="flex items-center gap-4 px-5 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all mt-auto border border-red-500/20">
-          <LogOut size={22}/> Güvenli Çıkış
-        </button>
+        
+        <nav className="space-y-2 flex-1">
+          <Link href={`/portal/${code}`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl font-bold transition-all">
+            <LayoutDashboard size={20} className="group-hover:text-[#BC13FE]"/> Ana Sayfa
+          </Link>
+          <div className="w-full flex items-center gap-4 px-5 py-4 bg-gradient-to-r from-[#BC13FE]/20 to-transparent border-l-4 border-[#BC13FE] text-white rounded-r-xl font-bold transition-all shadow-lg">
+             <Store size={20} className="text-[#BC13FE]" /> Sipariş Ver
+          </div>
+          <Link href={`/portal/${code}/orders`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl font-bold transition-all group">
+            <ShoppingBag size={20} className="group-hover:text-[#BC13FE]" /> Sipariş & Mutabakat
+          </Link>
+          <Link href={`/portal/${code}/pos`} className="w-full flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white hover:bg-white/5 rounded-xl font-bold transition-all group">
+            <Barcode size={20} className="group-hover:text-[#BC13FE]" /> Hızlı Satış (POS)
+          </Link>
+        </nav>
+        <button onClick={() => supabase.auth.signOut().then(() => router.push('/portal'))} className="flex items-center gap-4 px-5 py-4 text-red-500/50 hover:text-red-500 border border-red-500/10 rounded-xl font-bold transition-all"><LogOut size={20}/> Çıkış Yap</button>
       </aside>
 
-      {/* ANA İÇERİK */}
-      <main className="flex-1 lg:ml-72 p-6 md:p-12">
-        <div className="max-w-6xl mx-auto space-y-8">
-          
-          {/* ÜST BAR */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[40px] shadow-sm border border-white">
-             <div>
-                <Link href={`/portal/${code}/stores`} className="flex items-center gap-2 text-blue-500 font-bold hover:gap-3 transition-all uppercase text-[10px] tracking-widest mb-3">
+      {/* --- ANA İÇERİK --- */}
+      <main className={`transition-all duration-300 ${isSidebarOpen ? 'blur-sm' : ''} lg:ml-72 p-4 md:p-8 lg:p-10`}>
+        
+        {/* TOP BAR */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 bg-[#0F1219] p-6 md:p-8 rounded-[30px] border border-white/5">
+           <div>
+              <div className="flex items-center gap-4 mb-4">
+                <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 bg-white/5 rounded-xl border border-white/5"><Menu size={18} /></button>
+                <Link href={`/portal/${code}/stores`} className="flex items-center gap-2 text-[#BC13FE] hover:text-[#BC13FE]/80 font-bold uppercase text-[10px] tracking-[0.2em] transition-all">
                   <ArrowLeft size={16} /> Toptancı Listesine Dön
                 </Link>
-                <h1 className="text-3xl font-black text-[#1B2559] uppercase tracking-tighter leading-none">{company?.name}</h1>
-                <p className="text-gray-400 font-bold text-[10px] uppercase mt-2 tracking-widest">Hızlı Sipariş Ekranı</p>
-             </div>
-             <div className="bg-blue-50 px-6 py-4 rounded-3xl flex items-center gap-4 border border-blue-100">
-                <PackageSearch className="text-blue-600" size={24} />
-                <div>
-                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Aktif Ürün Sayısı</p>
-                   <p className="text-xl font-black text-[#1B2559]">{products.length} Çeşit</p>
-                </div>
-             </div>
-          </div>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-black uppercase tracking-tighter leading-none">{company?.name}</h1>
+              <p className="text-gray-500 font-bold text-[10px] uppercase mt-2 tracking-widest">Hızlı Dijital Sipariş Ekranı</p>
+           </div>
+           
+           <div className="w-full md:w-auto bg-[#0B0E14] px-6 py-4 rounded-2xl flex items-center gap-4 border border-white/5 shadow-inner">
+              <PackageSearch className="text-[#BC13FE]" size={24} />
+              <div>
+                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Sistemdeki Ürünler</p>
+                 <p className="text-lg font-black text-white">{products.length} Çeşit</p>
+              </div>
+           </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
-            {/* ÜRÜN LİSTESİ (8 Kolon) */}
-            <div className="lg:col-span-8 space-y-4">
-               {products.length === 0 ? (
-                 <div className="bg-white p-20 rounded-[40px] text-center border-2 border-dashed border-gray-100 shadow-sm">
-                    <ShoppingBag size={64} className="mx-auto text-gray-100 mb-6" />
-                    <h3 className="text-xl font-black text-[#1B2559] uppercase">Ürün Bulunamadı</h3>
-                    <p className="text-gray-400 font-bold mt-2 text-sm">Bu toptancının henüz sisteme kayıtlı ürünü yok.</p>
-                 </div>
-               ) : (
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {products.map(product => {
-                      const cartItem = cart.find(i => i.id === product.id);
-                      return (
-                        <div key={product.id} className="bg-white p-6 rounded-[35px] shadow-sm border border-white hover:shadow-xl transition-all group relative overflow-hidden">
-                           <div className="flex justify-between items-start mb-4">
-                              <div className="w-12 h-12 bg-gray-50 text-[#1B2559] rounded-2xl flex items-center justify-center font-black group-hover:bg-blue-600 group-hover:text-white transition-all">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* ÜRÜN LİSTESİ (8 Kolon) */}
+          <div className="lg:col-span-8 space-y-4">
+             {products.length === 0 ? (
+               <div className="bg-[#0F1219] p-20 rounded-[40px] text-center border-2 border-dashed border-white/5">
+                  <ShoppingBag size={64} className="mx-auto text-gray-700 mb-6" />
+                  <h3 className="text-xl font-black uppercase tracking-widest">Ürün Bulunamadı</h3>
+                  <p className="text-gray-500 font-bold mt-2 text-xs">Tedarikçi henüz vitrinini güncellemedi.</p>
+               </div>
+             ) : (
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 {products.map(product => {
+                    const cartItem = cart.find(i => i.id === product.id);
+                    return (
+                      <div key={product.id} className="bg-[#0F1219] p-6 rounded-[30px] border border-white/5 hover:border-[#BC13FE]/50 transition-all group relative overflow-hidden">
+                         <div className="absolute inset-0 bg-gradient-to-br from-[#BC13FE]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                         
+                         <div className="relative z-10">
+                           <div className="flex justify-between items-start mb-6">
+                              <div className="w-12 h-12 bg-[#0B0E14] border border-white/5 text-[#BC13FE] rounded-2xl flex items-center justify-center font-black group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(188,19,254,0.1)]">
                                  {product.name.substring(0,2).toUpperCase()}
                               </div>
                               <div className="text-right">
-                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none">Birim Fiyat</p>
-                                 <p className="text-xl font-black text-[#1B2559] mt-1">{Number(product.price).toLocaleString('tr-TR')} ₺</p>
+                                 <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest leading-none mb-1">Birim Fiyat</p>
+                                 <p className="text-xl font-black text-white">{Number(product.price).toLocaleString('tr-TR')} ₺</p>
                               </div>
                            </div>
                            
-                           <h4 className="font-black text-[#1B2559] uppercase text-sm mb-6 h-10 line-clamp-2">{product.name}</h4>
+                           <h4 className="font-black uppercase text-sm mb-6 h-10 line-clamp-2 text-gray-300 group-hover:text-white transition-colors">{product.name}</h4>
                            
-                           <div className="flex items-center justify-between bg-gray-50 p-2 rounded-2xl border border-gray-100">
-                              <button 
-                                onClick={() => updateQuantity(product, -1)} 
-                                className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors shadow-sm active:scale-95"
-                              >
+                           <div className="flex items-center justify-between bg-[#0B0E14] p-2 rounded-2xl border border-white/5">
+                              <button onClick={() => updateQuantity(product, -1)} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-500/10 transition-all active:scale-95">
                                 <Minus size={18}/>
                               </button>
-                              <span className="font-black text-lg text-[#1B2559] w-10 text-center">{cartItem?.quantity || 0}</span>
-                              <button 
-                                onClick={() => updateQuantity(product, 1)} 
-                                className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95"
-                              >
+                              <span className="font-black text-lg w-10 text-center">{cartItem?.quantity || 0}</span>
+                              <button onClick={() => updateQuantity(product, 1)} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-[#BC13FE] hover:bg-[#BC13FE] hover:text-white transition-all shadow-sm active:scale-95">
                                 <Plus size={18}/>
                               </button>
                            </div>
-                        </div>
-                      )
-                   })}
-                 </div>
-               )}
-            </div>
-
-            {/* SEPET PANELİ (4 Kolon) */}
-            <div className="lg:col-span-4 sticky top-8">
-               <div className="bg-[#1B2559] text-white p-8 rounded-[45px] shadow-2xl border border-white/10 relative overflow-hidden">
-                  {/* Dekoratif Arka Plan */}
-                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl"></div>
-                  
-                  <h3 className="text-xl font-black uppercase tracking-tighter mb-8 flex items-center gap-3">
-                    <ShoppingCart className="text-blue-400" /> Güncel Sepetiniz
-                  </h3>
-                  
-                  <div className="space-y-4 mb-10 max-h-[45vh] overflow-y-auto pr-2 custom-scrollbar">
-                     {cart.map(item => (
-                       <div key={item.id} className="flex justify-between items-center bg-white/5 p-4 rounded-[20px] border border-white/10 group">
-                          <div>
-                             <p className="text-[11px] font-black uppercase truncate w-32">{item.name}</p>
-                             <p className="text-[10px] text-blue-400 font-bold mt-1 uppercase tracking-widest">{item.quantity} x {item.price} ₺</p>
-                          </div>
-                          <p className="font-black text-sm">{(item.quantity * item.price).toLocaleString('tr-TR')} ₺</p>
-                       </div>
-                     ))}
-                     
-                     {cart.length === 0 && (
-                       <div className="text-center py-12">
-                          <ShoppingCart size={40} className="mx-auto mb-4 opacity-10" />
-                          <p className="text-blue-200/30 text-[10px] font-black uppercase tracking-[0.3em]">Sepetiniz Boş</p>
-                       </div>
-                     )}
-                  </div>
-
-                  <div className="border-t border-white/10 pt-8 mb-8">
-                     <div className="flex justify-between items-end">
-                        <div>
-                           <p className="text-[10px] font-black text-blue-300 uppercase tracking-[0.2em] mb-1">Genel Toplam</p>
-                           <p className="text-4xl font-black tracking-tighter">{calculateTotal().toLocaleString('tr-TR')} <span className="text-lg text-blue-400">₺</span></p>
-                        </div>
-                     </div>
-                  </div>
-
-                  <button 
-                    onClick={handleSendOrder}
-                    disabled={cart.length === 0 || sending}
-                    className="w-full py-6 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-700 disabled:opacity-50 text-white rounded-[25px] font-black uppercase tracking-widest shadow-2xl shadow-blue-500/30 transition-all flex items-center justify-center gap-3 active:scale-95"
-                  >
-                    {sending ? <Loader2 className="animate-spin" size={24}/> : <><CheckCircle2 size={24} /> Siparişi İlet</>}
-                  </button>
-                  
-                  <p className="text-[9px] text-blue-300/40 text-center mt-6 font-bold uppercase tracking-widest">Siparişiniz direkt toptancı paneline düşecektir.</p>
+                         </div>
+                      </div>
+                    )
+                 })}
                </div>
-            </div>
-
+             )}
           </div>
+
+          {/* SEPET PANELİ (4 Kolon - STICKY) */}
+          <div className="lg:col-span-4 lg:sticky lg:top-8 mt-8 lg:mt-0">
+             <div className="bg-[#0F1219] p-6 md:p-8 rounded-[35px] border border-white/5 relative overflow-hidden shadow-[0_0_40px_rgba(188,19,254,0.05)]">
+                {/* Dekoratif Arka Plan Glow */}
+                <div className="absolute -top-20 -right-20 w-48 h-48 bg-[#BC13FE]/10 rounded-full blur-[80px]"></div>
+                
+                <h3 className="text-lg font-black uppercase tracking-tighter mb-8 flex items-center gap-3 relative z-10">
+                  <ShoppingCart className="text-[#BC13FE]" /> Ağ Sepeti
+                </h3>
+                
+                <div className="space-y-3 mb-8 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar relative z-10">
+                   {cart.map(item => (
+                     <div key={item.id} className="flex justify-between items-center bg-[#0B0E14] p-4 rounded-2xl border border-white/5">
+                        <div>
+                           <p className="text-[10px] font-black uppercase text-gray-300 truncate w-32 md:w-40">{item.name}</p>
+                           <p className="text-[9px] text-[#BC13FE] font-bold mt-1 uppercase tracking-widest">{item.quantity} ADET x {item.price} ₺</p>
+                        </div>
+                        <p className="font-black text-sm text-white">{(item.quantity * item.price).toLocaleString('tr-TR')} ₺</p>
+                     </div>
+                   ))}
+                   
+                   {cart.length === 0 && (
+                     <div className="text-center py-10">
+                        <ShoppingCart size={32} className="mx-auto mb-4 opacity-20 text-gray-500" />
+                        <p className="text-gray-500 text-[9px] font-black uppercase tracking-[0.3em]">Aktarılan Veri Yok</p>
+                     </div>
+                   )}
+                </div>
+
+                <div className="border-t border-white/10 pt-6 mb-8 relative z-10">
+                   <div className="flex justify-between items-end">
+                      <div>
+                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Ağ Toplamı</p>
+                         <p className="text-3xl font-black tracking-tighter text-white">{calculateTotal().toLocaleString('tr-TR')} <span className="text-lg text-[#BC13FE]">₺</span></p>
+                      </div>
+                   </div>
+                </div>
+
+                <button 
+                  onClick={handleSendOrder}
+                  disabled={cart.length === 0 || sending}
+                  className="relative z-10 w-full py-5 bg-gradient-to-r from-[#3063E9] to-[#BC13FE] hover:opacity-90 disabled:opacity-50 text-white rounded-[20px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(188,19,254,0.3)] transition-all flex items-center justify-center gap-3 active:scale-95"
+                >
+                  {sending ? <Loader2 className="animate-spin" size={20}/> : <><CheckCircle2 size={20} /> Protokolü Başlat</>}
+                </button>
+                
+                <p className="text-[8px] text-gray-600 text-center mt-6 font-bold uppercase tracking-widest relative z-10">Veriler güvenli ağ üzerinden toptancıya iletilir.</p>
+             </div>
+          </div>
+
         </div>
       </main>
+
+      {/* GÜVENLİ CSS ENJEKSİYONU */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #BC13FE33; border-radius: 10px; }
+      `}} />
     </div>
   );
 }
