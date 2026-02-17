@@ -4,17 +4,15 @@ import React, { useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Building2, Mail, Lock, User, ArrowRight, Loader2, Rocket } from 'lucide-react';
+import { Rocket, Mail, Lock, Building2, ShieldCheck, Loader2, ArrowRight } from 'lucide-react';
 
-export default function BusinessRegisterPage() {
-  const [companyName, setCompanyName] = useState('');
-  const [fullName, setFullName] = useState('');
+export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const router = useRouter();
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -23,174 +21,88 @@ export default function BusinessRegisterPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
 
     try {
-      // 1. Supabase'e Kullanıcıyı Kaydet
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: { full_name: fullName }
-        }
       });
 
       if (authError) throw authError;
 
-      if (authData?.user) {
-        // 2. İşletmeyi (Company) Oluştur
-        const { data: companyData, error: companyError } = await supabase
+      if (authData.user) {
+        // Cari kod göndermiyoruz, SQL Trigger halledecek
+        const { error: dbError } = await supabase
           .from('companies')
-          .insert([{ name: companyName }])
-          .select()
-          .single();
+          .insert([{
+            owner_id: authData.user.id,
+            name: companyName.toUpperCase(),
+            email: email
+          }]);
 
-        if (companyError) throw companyError;
-        if (!companyData) throw new Error("Şirket kasası oluşturulamadı.");
+        if (dbError) throw dbError;
 
-        // 3. Kullanıcının profiline bu şirketin ID'sini yaz (Artık o bir İŞLETME)
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ 
-            company_id: companyData.id, 
-            full_name: fullName,
-            is_customer: false // Müşteri olmadığını netleştiriyoruz
-          })
-          .eq('id', authData.user.id);
-
-        if (profileError) throw profileError;
-
-        // 4. Her şey tamamsa direkt Yönetim Paneline şutla
-        router.push('/dashboard');
+        alert("Kayıt Protokolü Başarılı! ✅ Şimdi giriş yapabilirsiniz.");
+        router.push('/login');
       }
-
     } catch (err: any) {
-      setError(err.message || 'Kayıt olurken bir hata oluştu.');
+      alert("Kayıt Hatası: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex bg-[#F4F7FE] font-sans">
-      
-      {/* SOL TARAF: MARKALAŞMA VE VİZYON */}
-      <div className="hidden lg:flex w-1/2 bg-[#1B2559] text-white p-12 flex-col justify-between relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
-        
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-12">
-            <div className="w-12 h-12 bg-[#3063E9] rounded-xl flex items-center justify-center font-black text-2xl shadow-lg shadow-blue-500/50">Y</div>
-            <span className="text-3xl font-black tracking-tighter">Yusuf<span className="text-[#3063E9]">SaaS</span></span>
-          </div>
-          <h1 className="text-5xl font-black leading-tight mb-6 tracking-tighter">
-            Toptan Ticaretinizi <br/><span className="text-[#3063E9]">Dijitale Taşıyın.</span>
-          </h1>
-          <p className="text-lg text-gray-300 font-medium max-w-md">
-            Müşteri carilerinizi, B2B siparişlerinizi ve kasanızı tek bir ekrandan yönetin. Hemen kendi işletmenizi kurun.
-          </p>
+    <div className="min-h-screen bg-[#0B0E14] text-white flex items-center justify-center font-sans p-6 relative overflow-hidden">
+      <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-[#3063E9]/5 rounded-full blur-[150px] pointer-events-none"></div>
+      <div className="w-full max-w-xl bg-[#0F1219] rounded-[50px] border border-white/5 p-12 shadow-2xl relative z-10">
+        <div className="text-center mb-12">
+            <div className="inline-flex p-4 bg-[#3063E9]/10 rounded-3xl border border-[#3063E9]/20 mb-6 animate-pulse">
+                <Building2 size={32} className="text-[#3063E9]" />
+            </div>
+            <h1 className="text-3xl font-black tracking-tighter uppercase italic text-white">Yeni Global <span className="text-[#3063E9]">Cari</span> Kaydı</h1>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.4em] mt-3 italic text-center text-center">DurmazSaaS Network Katılım Formu</p>
         </div>
 
-        <div className="relative z-10 bg-white/10 p-6 rounded-3xl backdrop-blur-sm border border-white/10 inline-block w-max">
-          <div className="flex items-center gap-4">
-            <div className="bg-green-500 p-3 rounded-full"><Rocket size={24} className="text-white"/></div>
-            <div>
-              <h4 className="font-bold text-white">Dakikalar İçinde Hazır</h4>
-              <p className="text-sm text-gray-300">Kurulum gerektirmez, hemen faturaya başlayın.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SAĞ TARAF: İŞLETME KAYIT FORMU */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          
-          <div className="text-center lg:text-left mb-10">
-            <h2 className="text-3xl font-black text-[#1B2559] tracking-tighter uppercase mb-2">İşletmenizi Kurun</h2>
-            <p className="text-gray-500 font-medium">Sisteme katılıp B2B panelinizi hemen oluşturun.</p>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 text-red-500 p-4 rounded-2xl text-sm font-bold mb-6 border border-red-100 text-center">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleRegister} className="space-y-5">
-            
-            {/* ŞİRKET ADI */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Firma / İşletme Adı</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Building2 size={20} className="text-gray-400" /></div>
-                <input 
-                  type="text" required
-                  className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-2xl outline-none focus:border-[#3063E9] focus:ring-4 focus:ring-blue-500/10 transition-all font-bold text-[#1B2559]"
-                  placeholder="Örn: Yıldızlar Gıda Tic. Ltd. Şti."
-                  value={companyName} onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </div>
+        <form onSubmit={handleRegister} className="space-y-8">
+            <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest ml-1">İşletme / Tabela Adı</label>
+                <div className="relative group">
+                    <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-[#3063E9] transition-colors" size={20} />
+                    <input type="text" required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="w-full bg-[#0B0E14] border border-white/10 rounded-3xl py-6 pl-16 pr-6 text-sm font-bold focus:border-[#3063E9] outline-none transition-all uppercase placeholder:text-gray-800 text-white" placeholder="DURMAZ GIDA LTD." />
+                </div>
             </div>
 
-            {/* YETKİLİ ADI */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Yetkili Ad Soyad</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><User size={20} className="text-gray-400" /></div>
-                <input 
-                  type="text" required
-                  className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-2xl outline-none focus:border-[#3063E9] focus:ring-4 focus:ring-blue-500/10 transition-all font-bold text-[#1B2559]"
-                  placeholder="Adınız ve Soyadınız"
-                  value={fullName} onChange={(e) => setFullName(e.target.value)}
-                />
-              </div>
+            <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest ml-1">E-Posta Adresi</label>
+                <div className="relative group">
+                    <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-[#BC13FE] transition-colors" size={20} />
+                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-[#0B0E14] border border-white/10 rounded-3xl py-6 pl-16 pr-6 text-sm font-bold focus:border-[#BC13FE] outline-none transition-all placeholder:text-gray-800 text-white" placeholder="iletisim@sirketiniz.com" />
+                </div>
             </div>
 
-            {/* E-POSTA */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">E-Posta Adresi</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Mail size={20} className="text-gray-400" /></div>
-                <input 
-                  type="email" required
-                  className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-2xl outline-none focus:border-[#3063E9] focus:ring-4 focus:ring-blue-500/10 transition-all font-bold text-[#1B2559]"
-                  placeholder="ornek@sirket.com"
-                  value={email} onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
+            <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest ml-1">Güvenlik Parolası</label>
+                <div className="relative group">
+                    <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-600 group-focus-within:text-white transition-colors" size={20} />
+                    <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full bg-[#0B0E14] border border-white/10 rounded-3xl py-6 pl-16 pr-6 text-sm font-bold focus:border-white outline-none transition-all placeholder:text-gray-800 text-white" placeholder="••••••••" />
+                </div>
             </div>
 
-            {/* ŞİFRE */}
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Şifre Belirleyin</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><Lock size={20} className="text-gray-400" /></div>
-                <input 
-                  type="password" required minLength={6}
-                  className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-2xl outline-none focus:border-[#3063E9] focus:ring-4 focus:ring-blue-500/10 transition-all font-bold text-[#1B2559]"
-                  placeholder="En az 6 karakter"
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* BUTON */}
-            <button 
-              type="submit" disabled={loading}
-              className="w-full py-4 bg-[#3063E9] hover:bg-blue-700 text-white rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-blue-500/30 transition-all flex justify-center items-center gap-2 active:scale-95 mt-4"
-            >
-              {loading ? <Loader2 className="animate-spin" size={24} /> : <><ArrowRight size={24} /> Dükkanı Aç ve Başla</>}
+            <button type="submit" disabled={loading} className="w-full py-7 bg-white text-black rounded-[30px] font-black uppercase text-xs tracking-[0.4em] shadow-[0_15px_40px_rgba(255,255,255,0.1)] hover:bg-gray-200 active:scale-[0.97] transition-all flex items-center justify-center gap-4 group">
+                {loading ? <Loader2 size={24} className="animate-spin" /> : <ShieldCheck size={24} />} 
+                {loading ? 'SİSTEME İŞLENİYOR...' : 'AĞI ONAYLA VE KAYDOL'}
+                <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
             </button>
-          </form>
+        </form>
 
-          <p className="mt-8 text-center text-sm font-medium text-gray-500">
-            Zaten bir hesabınız var mı?{' '}
-            <Link href="/login" className="text-[#3063E9] font-black hover:underline">Giriş Yapın</Link>
-          </p>
-
+        <div className="mt-12 text-center border-t border-white/5 pt-8">
+            <Link href="/login" className="text-[10px] font-black text-gray-500 hover:text-[#3063E9] uppercase tracking-widest transition-colors">
+                Zaten Bir Cari Hesabım Var → <span className="text-white underline underline-offset-4">Giriş Yap</span>
+            </Link>
         </div>
       </div>
+      <div className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: `radial-gradient(#fff 1px, transparent 1px)`, backgroundSize: '40px 40px' }}></div>
     </div>
   );
 }
