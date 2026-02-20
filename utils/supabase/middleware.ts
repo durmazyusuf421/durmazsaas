@@ -31,20 +31,30 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
+  // Oturumu kontrol et
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // --- KORUMA MANTIĞI (GÜVENLİK) ---
+  const path = request.nextUrl.pathname
 
-  // 1. Kullanıcı GİRİŞ YAPMAMIŞSA ve Dashboard'a girmeye çalışıyorsa -> Login'e at
-  if (request.nextUrl.pathname.startsWith('/dashboard') && !user) {
+  // --- SİBER KORUMA VE YÖNLENDİRME MANTIĞI (MASTER) ---
+
+  // 1. ZIRH: Kullanıcı GİRİŞ YAPMAMIŞSA
+  // Müşteri Giriş (/portal) ve Müşteri Kayıt (/portal/register) sayfalarına dokunma!
+  // Ancak /portal/CARI-123 gibi korumalı alt sayfalara veya dashboard'a girmeye çalışırsa /login'e at.
+  const isKorumaliAltSayfa = path.startsWith('/portal/') || path.startsWith('/dashboard') || path.startsWith('/onboarding')
+  const isHalkaAcikPortal = path === '/portal' || path === '/portal/register'
+
+  if (isKorumaliAltSayfa && !isHalkaAcikPortal && !user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // 2. Kullanıcı GİRİŞ YAPMIŞSA ve Login sayfasına gitmeye çalışıyorsa -> Dashboard'a at
-  if ((request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/') && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  // 2. ROTA: Kullanıcı GİRİŞ YAPMIŞSA
+  // Eğer kullanıcı zaten içerideyse ve yanlışlıkla /login'e veya ana sayfaya (/) giderse, 
+  // onu akıllı yönlendirme merkezine (/portal) fırlat.
+  if ((path === '/login' || path === '/') && user) {
+    return NextResponse.redirect(new URL('/portal', request.url))
   }
 
   return response

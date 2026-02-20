@@ -1,8 +1,9 @@
 import { type NextRequest } from "next/server";
-// Dikkat: ./utils... yolunu kullanıyoruz, bu senin projende çalışıyordu.
+// Asıl motorumuz burada çalışıyor
 import { updateSession } from "./utils/supabase/middleware";
 
-export async function middleware(request: NextRequest) {
+// "default" kelimesini ekledik, sistem artık isyan etmeyecek!
+export default async function proxy(request: NextRequest) {
   return await updateSession(request);
 }
 

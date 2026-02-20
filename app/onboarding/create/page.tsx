@@ -37,9 +37,9 @@ export default function CreateCompanyPage() {
       // 3. SENİ ADMİN YAP VE PROFİLİNE DÜKKANI BAĞLA
       await supabase.from('profiles').update({ company_id: company.id, role: 'admin' }).eq('id', user.id);
 
-      // 4. OTURUMU TAZELE VE İÇERİ GİR
+      // 4. OTURUMU TAZELE VE İÇERİ GİR (YENİ ROTA: /portal)
       await supabase.auth.refreshSession();
-      window.location.href = '/dashboard';
+      window.location.href = '/portal';
 
     } catch (err: any) {
       alert("Hata: " + err.message);

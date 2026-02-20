@@ -44,7 +44,8 @@ export default function Sidebar() {
 
   // MENÜ ELEMANLARI - Personeller buraya eklendi
   const menuItems = [
-    { name: 'Ana Sayfa', path: '/dashboard', icon: LayoutDashboard, key: 'ana_sayfa' },
+    // ROTA GÜNCELLENDİ: Artık 404 veren dashboard'a değil, doğrudan Portal'a gidiyor!
+    { name: 'Ana Sayfa', path: '/portal', icon: LayoutDashboard, key: 'ana_sayfa' },
     { name: 'Cari Kartlar', path: '/customers', icon: Users, key: 'cari_kartlar' },
     { name: 'Faturalar', path: '/invoices', icon: FileText, key: 'faturalar' },
     { name: 'Ürünler', path: '/products', icon: Package, key: 'urunler' },
