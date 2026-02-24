@@ -34,8 +34,9 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-8">
             <a href="#ozellikler" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-white transition-all">Özellikler</a>
             <a href="#nasil-calisir" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-white transition-all">Nasıl Çalışır?</a>
-            <Link href="/login" className="px-6 py-2.5 bg-white text-black text-[10px] font-black rounded-full uppercase tracking-widest hover:bg-gray-200 transition-all flex items-center gap-2">
-              Giriş <ChevronRight size={14} />
+            {/* 🚀 SİBER YAMA: Akıllı Onboarding Motoruna Yönlendirildi */}
+            <Link href="/onboarding" className="px-6 py-2.5 bg-white text-black text-[10px] font-black rounded-full uppercase tracking-widest hover:bg-gray-200 transition-all flex items-center gap-2">
+              Sisteme Giriş <ChevronRight size={14} />
             </Link>
           </div>
         </div>
@@ -47,7 +48,7 @@ export default function LandingPage() {
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/5 border border-white/10 rounded-full text-[9px] font-black uppercase tracking-[0.3em] mb-10 text-[#3063E9] animate-bounce">
             <Zap size={12} fill="currentColor" /> B2B Sektöründe Siber Devrim
           </div>
-          <h1 className="text-6xl md:text-[110px] font-black leading-[0.85] tracking-tight uppercase italic italic mb-10">
+          <h1 className="text-6xl md:text-[110px] font-black leading-[0.85] tracking-tight uppercase italic mb-10">
             TİCARETİN <br /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3063E9] via-white to-[#BC13FE]">YENİ MERKEZİ</span>
           </h1>
           <p className="max-w-2xl mx-auto text-gray-500 text-lg font-bold mb-16 uppercase tracking-tight">
@@ -55,11 +56,12 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col md:flex-row gap-6 justify-center">
-            <Link href="/login" className="px-12 py-6 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:-translate-y-2 transition-all flex items-center justify-center gap-3">
-              <Building2 size={20} /> İŞLETME PANELİ
+            {/* 🚀 SİBER YAMA: Akıllı Yönlendirmeye Bağlandı */}
+            <Link href="/onboarding" className="px-12 py-6 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:-translate-y-2 transition-all flex items-center justify-center gap-3">
+              <Building2 size={20} /> İŞLETME PANELİNE GİR
             </Link>
-            <Link href="/portal" className="px-12 py-6 bg-[#0F1219] border border-white/10 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] hover:bg-white/5 transition-all flex items-center justify-center gap-3">
-              <Store size={20} className="text-[#BC13FE]" /> MÜŞTERİ PORTALI
+            <Link href="/onboarding" className="px-12 py-6 bg-[#0F1219] border border-white/10 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] hover:bg-white/5 transition-all flex items-center justify-center gap-3">
+              <Store size={20} className="text-[#BC13FE]" /> MÜŞTERİ PORTALINA GİR
             </Link>
           </div>
         </div>
@@ -68,7 +70,7 @@ export default function LandingPage() {
       {/* --- DETAYLI ÖZELLİKLER (BENTO GRID) --- */}
       <section id="ozellikler" className="py-32 px-6 max-w-7xl mx-auto">
         <div className="text-center mb-20">
-          <h2 className="text-4xl font-black uppercase italic italic mb-4">Neden DurmazSaaS?</h2>
+          <h2 className="text-4xl font-black uppercase italic mb-4">Neden DurmazSaaS?</h2>
           <p className="text-gray-600 text-[10px] font-bold uppercase tracking-[0.5em]">Geleneksel ticaretin siber zırhlı hali</p>
         </div>
 
@@ -80,7 +82,7 @@ export default function LandingPage() {
               <div className="w-16 h-16 bg-[#020408] rounded-2xl flex items-center justify-center mb-8 shadow-2xl">
                 <BarChart3 className="text-[#3063E9]" size={32} />
               </div>
-              <h3 className="text-2xl font-black uppercase italic italic mb-4">360° SİBER RADAR</h3>
+              <h3 className="text-2xl font-black uppercase italic mb-4">360° SİBER RADAR</h3>
               <p className="text-gray-500 text-xs font-bold leading-relaxed uppercase tracking-widest mb-8">
                 Bayilerinizin stok hareketlerini, sipariş yoğunluğunu ve ödeme dengelerini yapay zeka destekli grafiklerle canlı takip edin. Hiçbir hareket gözünüzden kaçmaz.
               </p>
@@ -90,7 +92,7 @@ export default function LandingPage() {
                 <div className="h-1 w-4 bg-white/10 rounded-full" />
               </div>
             </div>
-            {/* Görsel Detay İllüstrasyonu (Kodla Çizilen) */}
+            {/* Görsel Detay İllüstrasyonu */}
             <div className="absolute bottom-[-20px] right-[-20px] opacity-20 group-hover:opacity-40 transition-opacity">
               <Cpu size={200} />
             </div>
@@ -99,7 +101,7 @@ export default function LandingPage() {
           {/* Orta Kart: Otomatik Fatura */}
           <div className="md:col-span-2 bg-[#0F1219] border border-white/5 rounded-[40px] p-10 flex items-center justify-between group overflow-hidden">
             <div className="max-w-[60%]">
-              <h3 className="text-xl font-black uppercase italic italic mb-3">AKILLI MUHASEBE</h3>
+              <h3 className="text-xl font-black uppercase italic mb-3">AKILLI MUHASEBE</h3>
               <p className="text-gray-500 text-[10px] font-bold leading-relaxed uppercase tracking-widest">
                 Sipariş onaylandığı an fatura ERP sisteminize düşer. Manuel veri girişi hatalarına son verin.
               </p>
@@ -130,7 +132,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row justify-between items-end mb-20 gap-8">
             <div className="max-w-xl">
-              <h2 className="text-5xl font-black uppercase italic italic mb-6 leading-none">İŞLETME PROTOKOLÜ <br /> <span className="text-[#3063E9]">NASIL ÇALIŞIR?</span></h2>
+              <h2 className="text-5xl font-black uppercase italic mb-6 leading-none">İŞLETME PROTOKOLÜ <br /> <span className="text-[#3063E9]">NASIL ÇALIŞIR?</span></h2>
               <p className="text-gray-500 text-xs font-bold uppercase tracking-widest leading-loose">Sisteme entegre olmak 3 adımdan daha kısa sürer.</p>
             </div>
             <div className="flex gap-4">
@@ -140,7 +142,6 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-16 relative">
-            {/* Bağlantı Çizgisi */}
             <div className="hidden md:block absolute top-10 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-white/10 to-transparent -z-10" />
             
             {[
@@ -152,7 +153,7 @@ export default function LandingPage() {
                 <div className="w-20 h-20 bg-[#020408] border border-white/10 rounded-full flex items-center justify-center text-3xl font-black italic mb-8 shadow-[0_0_30px_rgba(48,99,233,0.2)]">
                   {step.num}
                 </div>
-                <h4 className="text-lg font-black uppercase tracking-widest mb-4 italic italic">{step.title}</h4>
+                <h4 className="text-lg font-black uppercase tracking-widest mb-4 italic">{step.title}</h4>
                 <p className="text-gray-500 text-[11px] font-bold leading-relaxed uppercase tracking-widest">{step.desc}</p>
               </div>
             ))}
@@ -181,15 +182,13 @@ export default function LandingPage() {
       <section className="py-32 px-6">
         <div className="max-w-5xl mx-auto bg-gradient-to-br from-[#0F1219] to-black rounded-[60px] p-16 md:p-24 text-center border border-white/5 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_#3063E915_0%,transparent_70%)]" />
-          <h2 className="text-5xl md:text-7xl font-black mb-12 uppercase italic italic relative z-10 leading-tight">
+          <h2 className="text-5xl md:text-7xl font-black mb-12 uppercase italic relative z-10 leading-tight">
             TİCARETİN GELECEĞİNE <br /> <span className="text-[#3063E9]">ŞİMDİ</span> BAĞLAN
           </h2>
           <div className="flex flex-col sm:flex-row gap-6 justify-center relative z-10">
-            <Link href="/portal/register" className="px-12 py-7 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.3em] hover:bg-gray-200 transition-all">
-              MÜŞTERİ KAYDI OL
-            </Link>
-            <Link href="/login" className="px-12 py-7 bg-transparent border border-white/20 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] hover:bg-white/5 transition-all">
-              İŞLETME KUR
+            {/* 🚀 SİBER YAMA: Akıllı Onboarding'e gönderir */}
+            <Link href="/onboarding" className="px-12 py-7 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.3em] hover:bg-gray-200 transition-all">
+              Hemen Kayıt Ol
             </Link>
           </div>
         </div>

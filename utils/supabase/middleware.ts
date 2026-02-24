@@ -42,7 +42,7 @@ export async function updateSession(request: NextRequest) {
 
   // 1. ZIRH: Kullanıcı GİRİŞ YAPMAMIŞSA
   // Müşteri Giriş (/portal) ve Müşteri Kayıt (/portal/register) sayfalarına dokunma!
-  // Ancak /portal/CARI-123 gibi korumalı alt sayfalara veya dashboard'a girmeye çalışırsa /login'e at.
+  // Ancak korumalı alt sayfalara girmeye çalışırsa /login'e at.
   const isKorumaliAltSayfa = path.startsWith('/portal/') || path.startsWith('/dashboard') || path.startsWith('/onboarding')
   const isHalkaAcikPortal = path === '/portal' || path === '/portal/register'
 
@@ -51,10 +51,10 @@ export async function updateSession(request: NextRequest) {
   }
 
   // 2. ROTA: Kullanıcı GİRİŞ YAPMIŞSA
-  // Eğer kullanıcı zaten içerideyse ve yanlışlıkla /login'e veya ana sayfaya (/) giderse, 
-  // onu akıllı yönlendirme merkezine (/portal) fırlat.
-  if ((path === '/login' || path === '/') && user) {
-    return NextResponse.redirect(new URL('/portal', request.url))
+  // SADECE /login veya /portal (eski giriş) sayfasına giderse onu Akıllı Yönlendirme Motoruna (/onboarding) fırlat.
+  // 🚀 ANA SAYFAYI (/) ÖZGÜR BIRAKTIK! Artık sunumda vitrini rahatça gösterebilirsin.
+  if ((path === '/login' || path === '/portal') && user) {
+    return NextResponse.redirect(new URL('/onboarding', request.url))
   }
 
   return response
