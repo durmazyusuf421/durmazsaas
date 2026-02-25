@@ -10,10 +10,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-// SİBER ZIRH: ARAYÜZLER EKLENDİ
 interface LinkedCompany {
-  id: string; // customers tablosundaki ID
-  company_id: string; // İşletmenin ID'si
+  id: string; 
+  company_id: string; 
   company_name: string;
   balance: number;
 }
@@ -32,14 +31,10 @@ export default function CustomerStores() {
   const [cart, setCart] = useState<{product: any, quantity: number}[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Filtre State'leri
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('Tümü');
-  
-  // Toptancı Dropdown Kontrolcüsü
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
 
-  // SİBER YAMA: Bağlı İşletmeler ve Yükleme State'i
   const [linkedCompanies, setLinkedCompanies] = useState<LinkedCompany[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -53,19 +48,22 @@ export default function CustomerStores() {
       setLoading(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.push('/portal'); return; }
+        if (!user) { router.push('/login'); return; }
 
-        const { data: profileData } = await supabase.from('profiles').select('*').eq('global_cari_code', code).maybeSingle();
+        const cariKodu = decodeURIComponent(code).trim().toUpperCase();
+
+        const { data: profileData } = await supabase.from('profiles').select('*').eq('global_cari_code', cariKodu).maybeSingle();
         if (profileData) setProfile(profileData);
 
-        // 🚀 SİBER MIKNATIS: BAĞLI İŞLETMELERİ ÇEK
-        if (profileData?.global_cari_code) {
-          const { data: customersData } = await supabase
+        // 1. Önce bu müşterinin bağlı olduğu Toptancıları (company_id) bulalım
+        let companyIdsToFetch: string[] = [];
+        
+        const { data: customersData } = await supabase
             .from('customers')
             .select('id, company_id, balance, companies!inner(name)')
-            .eq('code', profileData.global_cari_code.trim());
+            .eq('code', cariKodu);
 
-          if (customersData && customersData.length > 0) {
+        if (customersData && customersData.length > 0) {
             const formattedCompanies = customersData.map((c: any) => ({
               id: c.id,
               company_id: c.company_id,
@@ -73,28 +71,27 @@ export default function CustomerStores() {
               balance: Number(c.balance) || 0
             }));
             setLinkedCompanies(formattedCompanies);
-          }
+            companyIdsToFetch = formattedCompanies.map(c => c.company_id);
         }
 
-        // ÜRÜNLERİ ÇEK
-        const { data: productsData, error } = await supabase
-          .from('products')
-          .select('*, companies(name)')
-          .order('created_at', { ascending: false });
-        
-        if (!error && productsData && productsData.length > 0) {
-          setProducts(productsData);
+        // 2. SADECE BAĞLI OLDUĞU TOPTANCILARIN ÜRÜNLERİNİ ÇEK
+        if (companyIdsToFetch.length > 0) {
+            const { data: productsData, error } = await supabase
+              .from('products')
+              .select('*, companies(name)')
+              .in('company_id', companyIdsToFetch)
+              .order('created_at', { ascending: false });
+            
+            if (!error && productsData) {
+              setProducts(productsData);
+            } else {
+              setProducts([]); // Hata varsa veya ürün yoksa boş bırak (SAHTE VERİ YOK)
+            }
         } else {
-          setProducts([
-            { id: 1, name: 'Premium Espresso Çekirdeği 1KG', price: 850, stock: 124, category: 'Gıda', company_name: 'Merkez Gıda Toptan' },
-            { id: 2, name: 'Sade Karton Bardak 8oz (1000 Adet)', price: 420, stock: 8, category: 'Ambalaj', company_name: 'Yıldız Ambalaj' },
-            { id: 3, name: 'Organik Sızma Zeytinyağı 5L', price: 1250, stock: 45, category: 'Gıda', company_name: 'Merkez Gıda Toptan' },
-            { id: 4, name: 'Temizlik Otomat İlacı 20L', price: 680, stock: 45, category: 'Temizlik', company_name: 'Pak Endüstriyel' },
-            { id: 5, name: 'Coca-Cola 330ml Kutu (24 Lük)', price: 360, stock: 200, category: 'İçecek', company_name: 'Kardeşler İçecek' },
-            { id: 6, name: 'Maden Suyu 200ml (24 Lük)', price: 120, stock: 150, category: 'İçecek', company_name: 'Kardeşler İçecek' },
-            { id: 7, name: 'A4 Fotokopi Kağıdı (500 Yaprak)', price: 140, stock: 300, category: 'Kırtasiye', company_name: 'Ofis Tedarik A.Ş.' },
-          ]);
+            // Müşteri hiçbir toptancıya bağlı değilse ürün listesi kesinlikle boş olmalı
+            setProducts([]);
         }
+
       } catch (error) { 
         console.error("Veri çekme hatası:", error); 
       } finally { 
@@ -125,11 +122,10 @@ export default function CustomerStores() {
   const cartTotal = cart.reduce((total, item) => total + (item.product.price * item.quantity), 0);
   const cartItemCount = cart.reduce((count, item) => count + item.quantity, 0);
 
-  // 🚀 SİPARİŞ GÖNDERME MOTORU
+  // Sipariş Gönderme
   const handleSubmitOrder = async () => {
     if (cart.length === 0 || isSubmitting) return;
 
-    // Güvenlik: Tek sepette sadece tek toptancıdan ürün alınabilir
     const uniqueCartCompanies = new Set(cart.map(c => c.product.company_name || c.product.companies?.name));
     if (uniqueCartCompanies.size > 1) {
         alert("Lütfen tek seferde sadece tek bir toptancıdan sipariş verin. Sepetinizde farklı işletmelerin ürünleri var.");
@@ -147,8 +143,8 @@ export default function CustomerStores() {
     setIsSubmitting(true);
     try {
         const orderData = {
-            company_id: targetCompany.company_id, // Siparişin gideceği şirket
-            customer_id: targetCompany.id,        // Müşterinin o şirketteki ID'si
+            company_id: targetCompany.company_id, 
+            customer_id: targetCompany.id,        
             customer_name: profile?.full_name || 'Bilinmeyen Müşteri',
             cari_code: profile?.global_cari_code || code,
             total_amount: cartTotal,
@@ -165,8 +161,8 @@ export default function CustomerStores() {
         if (error) throw error;
 
         alert(`✅ Sipariş Başarıyla Gönderildi! Toptancı: ${targetCompany.company_name}`);
-        setCart([]); // Sepeti boşalt
-        setIsCartOpen(false); // Çekmeceyi kapat
+        setCart([]); 
+        setIsCartOpen(false); 
     } catch (e: any) {
         alert("Sipariş gönderilirken hata oluştu: " + e.message);
     } finally {
@@ -174,11 +170,9 @@ export default function CustomerStores() {
     }
   };
 
-  // Dinamik Listeler (Siber Mıknatıs ile sadece bağlı işletmeleri getirir)
   const uniqueCompanies = linkedCompanies.length > 0 ? linkedCompanies.map(c => c.company_name) : Array.from(new Set(products.map(p => p.company_name || p.companies?.name || 'Toptancı')));
   const uniqueCategories = ['Tümü', ...Array.from(new Set(products.map(p => p.category || 'Genel')))];
 
-  // Zırhlı Filtreleme
   const filteredProducts = products.filter(p => {
     const compName = p.company_name || p.companies?.name || 'Toptancı';
     const catName = p.category || 'Genel';
@@ -200,7 +194,7 @@ export default function CustomerStores() {
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white font-sans selection:bg-[#BC13FE]/30 overflow-x-hidden relative">
       
-      {/* --- SIDEBAR --- */}
+      {/* SIDEBAR */}
       {isSidebarOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
       <aside className={`fixed top-0 left-0 h-full w-72 bg-[#0F1219] border-r border-white/5 p-8 flex flex-col z-[70] transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
         <div className="flex items-center justify-between mb-12">
@@ -230,12 +224,12 @@ export default function CustomerStores() {
           </Link>
         </nav>
 
-        <button onClick={() => supabase.auth.signOut().then(() => router.push('/portal'))} className="mt-auto flex items-center gap-4 px-5 py-4 text-red-500/50 hover:text-red-500 border border-red-500/10 rounded-xl font-bold transition-all hover:bg-red-500/10 group">
+        <button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} className="mt-auto flex items-center gap-4 px-5 py-4 text-red-500/50 hover:text-red-500 border border-red-500/10 rounded-xl font-bold transition-all hover:bg-red-500/10 group">
           <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" /> Sistemden Çık
         </button>
       </aside>
 
-      {/* --- ANA İÇERİK --- */}
+      {/* ANA İÇERİK */}
       <main className={`transition-all duration-300 ${isSidebarOpen ? 'blur-sm' : ''} lg:ml-72 p-4 md:p-8 lg:p-10 relative z-10 pb-32`}>
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#BC13FE]/5 blur-[150px] rounded-full pointer-events-none -z-10" />
 
@@ -273,7 +267,7 @@ export default function CustomerStores() {
           </div>
         </div>
 
-        {/* ARAMA, TOPTANCI SEÇİMİ VE KATEGORİLER */}
+        {/* ARAMA VE TOPTANCI SEÇİMİ */}
         <div className="flex flex-col gap-4 mb-8">
             <div className="flex flex-col md:flex-row gap-4 relative z-20">
                 <div className="flex-1 relative group">
@@ -343,10 +337,12 @@ export default function CustomerStores() {
 
         {/* ÜRÜN VİTRİNİ */}
         {filteredProducts.length === 0 ? (
-           <div className="py-20 flex flex-col items-center justify-center text-center opacity-50 relative z-10">
+           <div className="py-32 flex flex-col items-center justify-center text-center opacity-50 relative z-10">
              <Package size={64} className="text-gray-600 mb-6" />
-             <h3 className="text-xl font-black uppercase italic mb-2">Ürün Bulunamadı</h3>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest max-w-sm">Bu toptancıya veya kategoriye ait ürün bulunmuyor.</p>
+             <h3 className="text-xl font-black uppercase italic mb-2">Market Boş</h3>
+             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest max-w-sm">
+                 Şu anda kayıtlı olduğunuz toptancılarda ürün bulunmuyor.
+             </p>
            </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 relative z-10">
@@ -473,11 +469,10 @@ export default function CustomerStores() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#BC13FE]/10 blur-3xl rounded-full pointer-events-none" />
                 <div className="space-y-3 mb-6 relative z-10">
                   <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest"><span>Ara Toplam</span><span>{cartTotal.toLocaleString('tr-TR')} ₺</span></div>
-                  <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest"><span>KDV (%0 - B2B Muafiyet)</span><span>0 ₺</span></div>
+                  <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest"><span>KDV (%0 - B2B)</span><span>0 ₺</span></div>
                   <div className="flex justify-between text-lg font-black text-white italic pt-3 border-t border-white/5 mt-3"><span className="uppercase not-italic text-sm self-end mb-1">Genel Toplam</span><span>{cartTotal.toLocaleString('tr-TR')} <span className="text-sm text-[#BC13FE] not-italic">₺</span></span></div>
                 </div>
                 
-                {/* 🚀 ARTIK AKTİF OLAN O BUTON! */}
                 <button 
                     onClick={handleSubmitOrder}
                     disabled={isSubmitting || cart.length === 0}

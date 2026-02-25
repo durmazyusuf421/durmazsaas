@@ -22,25 +22,38 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      // 1. Supabase Auth ile Giriş Yap
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      if (authError) throw authError;
 
-      // PATRON DİKKAT: Burada 'cari_code' bilgisini özellikle istiyoruz
-      const { data: userData, error: userError } = await supabase
-        .from('companies')
-        .select('cari_code, name, id')
-        .eq('owner_id', data.user.id)
+      // 2. Kullanıcının Kim Olduğunu Anla (Müşteri mi Toptancı mı?)
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('is_customer')
+        .eq('id', authData.user.id)
         .single();
 
-      if (userError) throw new Error("Şirket profiliniz bulunamadı.");
+      // 🚀 ROTAYI DÜZELTTİK: Müşteri ise onu Siber Merkeze (Customer Hub) yolla
+      if (profileData && profileData.is_customer) {
+        router.push(`/portal/customer-hub`);
+        return; // İşlemi bitir, aşağıya inme
+      }
 
-      // ROTA KONTROLÜ: Seni o beyaz 'dashboard' sayfasına değil, 
-      // portal altındaki 'business' klasörüne (yani o mat siyah sayfaya) zorla gönderiyoruz.
-      const slug = userData.cari_code || userData.name || userData.id;
+      // 3. Eğer müşteri değilse Toptancıdır
+      const { data: companyData, error: companyError } = await supabase
+        .from('companies')
+        .select('cari_code, name, id')
+        .eq('owner_id', authData.user.id)
+        .single();
+
+      if (companyError) throw new Error("Şirket profiliniz bulunamadı.");
+
+      // Toptancıyı kendi business paneline gönder
+      const slug = companyData.cari_code || companyData.name || companyData.id;
       router.push(`/portal/${slug}/business`);
       
     } catch (err: any) {
-      alert("Hata: " + err.message);
+      alert("Giriş Hatası: Lütfen bilgilerinizi kontrol edin.");
     } finally {
       setLoading(false);
     }

@@ -5,8 +5,8 @@ import { createBrowserClient } from '@supabase/ssr';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, ShoppingCart, Users, Package, LogOut, 
-  Loader2, Rocket, FileText, Bell, Menu, X, 
-  Search, Eye, CheckCircle2, Clock, Truck, Plus, Minus, Trash2, TrendingDown, FileCheck, ReceiptText, ShieldAlert, Printer
+  Loader2, Rocket, FileText, Bell, Menu, X, Settings, TrendingDown,
+  Search, Eye, CheckCircle2, Clock, Truck, Plus, Minus, Trash2, FileCheck, ReceiptText, ShieldAlert, Printer, AlertTriangle, PlayCircle
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -57,19 +57,17 @@ interface OrderType {
   created_at?: string;
   items: OrderItem[];
   is_invoiced?: boolean;
-  invoice_id?: string; // Mutabakat için
-  invoice_status?: string; // Mutabakat için
+  invoice_id?: string; 
+  invoice_status?: string; 
 }
 
 // --- SABİT VERİLER (ÜRÜN KATALOGU) ---
 const COMPANY_UNITS: string[] = ['AD', 'KG', 'KOLİ', 'LT', 'ÇUVAL'];
-
 const COMPANY_PRODUCTS: Product[] = [
   { id: 'P1', name: 'Premium Espresso Çekirdeği 1KG', price: 850, stock: 124, category: 'Gıda', defaultUnit: 'KG' },
   { id: 'P2', name: 'Karton Bardak 8oz (1000 Adet)', price: 420, stock: 45, category: 'Ambalaj', defaultUnit: 'KOLİ' },
   { id: 'P3', name: 'Temizlik Otomat İlacı 20L', price: 680, stock: 12, category: 'Temizlik', defaultUnit: 'LT' },
   { id: 'P4', name: 'A4 Fotokopi Kağıdı (500 Yaprak)', price: 140, stock: 300, category: 'Kırtasiye', defaultUnit: 'AD' },
-  { id: 'P5', name: 'Islak Mendil 100\'lü Paket', price: 45, stock: 500, category: 'Temizlik', defaultUnit: 'KOLİ' },
 ];
 
 export default function BusinessOrders() {
@@ -85,6 +83,7 @@ export default function BusinessOrders() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [profileName, setProfileName] = useState('Yönetici');
   const [loading, setLoading] = useState(true);
+  const [companyNotFound, setCompanyNotFound] = useState(false); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const [orders, setOrders] = useState<OrderType[]>([]);
@@ -106,6 +105,7 @@ export default function BusinessOrders() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setCompanyNotFound(false);
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { router.push('/login'); return; }
@@ -114,26 +114,21 @@ export default function BusinessOrders() {
         if (profile) setProfileName(profile.full_name || 'Yönetici');
 
         let myCompany = null;
-        const { data: byCode } = await supabase.from('companies').select('id').eq('name', code).maybeSingle();
         
-        if (byCode) myCompany = byCode;
-        else if (profile?.company_id) {
-            const { data: byProfile } = await supabase.from('companies').select('id').eq('id', profile.company_id).maybeSingle();
-            myCompany = byProfile;
-        }
+        const { data: userCompanies } = await supabase.from('companies').select('id').eq('owner_id', user.id).limit(1);
+        if (userCompanies && userCompanies.length > 0) myCompany = userCompanies[0];
 
         if (!myCompany) {
-            const { data: first } = await supabase.from('companies').select('id').limit(1).maybeSingle();
-            myCompany = first;
+            const decodedCode = decodeURIComponent(code).trim();
+            const { data: byCode } = await supabase.from('companies').select('id').ilike('name', decodedCode).limit(1);
+            if (byCode && byCode.length > 0) myCompany = byCode[0];
         }
 
         if (myCompany) {
           setCompanyId(myCompany.id);
-
           const { data: custData } = await supabase.from('customers').select('*').eq('company_id', myCompany.id).order('name', { ascending: true });
           if (custData) setDbCustomers(custData as DbCustomer[]);
 
-          // Fatura durumlarını çeken zırhlı sorgu
           const { data: ordersData } = await supabase
             .from('orders')
             .select(`*, invoices(id, status)`)
@@ -149,8 +144,8 @@ export default function BusinessOrders() {
                 customer_name: o.customer_name,
                 cari_code: o.cari_code,
                 total_amount: o.total_amount,
-                status: o.status,
-                date: new Date(o.created_at).toLocaleDateString('tr-TR'),
+                status: o.status || 'Yeni', // Varsayılan durum Yeni
+                date: new Date(o.created_at).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
                 items: o.items,
                 is_invoiced: !!invoice,
                 invoice_id: invoice?.id,
@@ -159,13 +154,33 @@ export default function BusinessOrders() {
             });
             setOrders(formatted);
           }
+        } else {
+            setCompanyNotFound(true);
         }
-      } catch (e) { console.error(e); } finally { setLoading(false); }
+      } catch (e) { 
+          setCompanyNotFound(true);
+      } finally { 
+          setLoading(false); 
+      }
     };
     fetchData();
   }, [code, router, supabase]);
 
-  // --- 🚀 AŞAMA 1: ONAYA GÖNDER (Bakiye Düşmez) ---
+  // 🚀 AŞAMA 1: SİPARİŞİ "HAZIRLANIYOR"A AL
+  const handleSetPreparing = async (order: OrderType) => {
+    setActionLoading(order.id);
+    try {
+      const { error } = await supabase.from('orders').update({ status: 'Hazırlanıyor' }).eq('id', order.id);
+      if (error) throw error;
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Hazırlanıyor' } : o));
+    } catch (e: any) {
+      alert("Hata: " + e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // 🚀 AŞAMA 2: FATURA KES VE ONAYA GÖNDER
   const handleSendToApproval = async (order: OrderType) => {
     if (order.is_invoiced || !companyId || !order.customer_id) return;
     
@@ -187,14 +202,18 @@ export default function BusinessOrders() {
 
       if (invError) throw invError;
 
+      // Siparişin durumunu da "Onaya Gönderildi" yap
+      await supabase.from('orders').update({ status: 'Onaya Gönderildi' }).eq('id', order.id);
+
       setOrders(prev => prev.map(o => o.id === order.id ? { 
           ...o, 
+          status: 'Onaya Gönderildi',
           is_invoiced: true, 
           invoice_id: invData[0].id, 
           invoice_status: 'Müşteri Onayı Bekliyor' 
       } : o));
       
-      alert(`🎯 Fatura Onaya Gönderildi! Müşteri onaylayana kadar bakiye düşmeyecektir.`);
+      alert(`🎯 Fatura Kesildi ve Müşteri Onayına Gönderildi!`);
     } catch (e: any) {
       alert(`Hata oluştu: ${e.message}`);
     } finally {
@@ -202,25 +221,36 @@ export default function BusinessOrders() {
     }
   };
 
-  // --- 🚀 AŞAMA 2: MÜŞTERİ ONAYLADI (Bakiye Düşer) ---
+  // 🚀 AŞAMA 3: MÜŞTERİ ONAYINI ZORLA / TAMAMLA (Bakiye Düşer)
   const handleCustomerApproved = async (order: OrderType) => {
     if (!companyId || !order.customer_id || !order.invoice_id) return;
     
     setActionLoading(order.id);
     try {
-      const { error: invError } = await supabase.from('invoices').update({ status: 'Ödenmedi' }).eq('id', order.invoice_id);
-      if (invError) throw invError;
+      // 1. Faturayı Ödenmedi (Cariye işlendi) yap
+      await supabase.from('invoices').update({ status: 'Ödenmedi' }).eq('id', order.invoice_id);
+      
+      // 2. Siparişi Tamamlandı yap
+      await supabase.from('orders').update({ status: 'Tamamlandı' }).eq('id', order.id);
 
-      const { error: transError } = await supabase.from('transactions').insert([{
+      // 3. Finansal Hareket (Ekstre) Ekle
+      await supabase.from('transactions').insert([{
           company_id: companyId,
           customer_id: order.customer_id,
           type: 'FATURA',
           amount: order.total_amount,
-          description: `Müşteri Onaylı Sipariş Faturası (${order.id})`
+          description: `Müşteri Onaylı Sipariş Faturası (${order.id.slice(0,8)})`,
+          items: order.items // Sipariş detaylarını da ekstreye yansıtıyoruz
       }]);
-      if (transError) throw transError;
 
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, invoice_status: 'Ödenmedi' } : o));
+      // 4. Müşterinin Bakiyesine Borç Yaz
+      const { data: custData } = await supabase.from('customers').select('balance').eq('id', order.customer_id).single();
+      if (custData) {
+          const newBalance = Number(custData.balance) + Number(order.total_amount);
+          await supabase.from('customers').update({ balance: newBalance }).eq('id', order.customer_id);
+      }
+
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Tamamlandı', invoice_status: 'Ödenmedi' } : o));
       alert(`✅ Mutabakat Sağlandı! Müşterinin bakiyesine ${order.total_amount} ₺ borç yansıtıldı.`);
     } catch (e: any) {
       alert(`Onaylama sırasında hata: ${e.message}`);
@@ -229,6 +259,7 @@ export default function BusinessOrders() {
     }
   };
 
+  // --- POS MOTORU ---
   const getTempState = (pId: string): TempState => {
     const p = COMPANY_PRODUCTS.find(x => x.id === pId);
     return tempProductStates[pId] || { qty: 1, unit: p?.defaultUnit || 'AD', customPrice: p?.price || 0 };
@@ -265,7 +296,7 @@ export default function BusinessOrders() {
       customer_name: customer?.name || 'Bilinmeyen',
       cari_code: customer?.code || 'YOK',
       total_amount: manualCartTotal,
-      status: 'Yeni',
+      status: 'Yeni', // Buradan gelen de Yeni başlar
       items: manualCart.map(c => ({
         name: c.product.name,
         qty: c.qty,
@@ -286,7 +317,7 @@ export default function BusinessOrders() {
           cari_code: data[0].cari_code,
           total_amount: data[0].total_amount,
           status: data[0].status,
-          date: new Date().toLocaleDateString('tr-TR'),
+          date: new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
           items: data[0].items,
           is_invoiced: false
         };
@@ -302,23 +333,30 @@ export default function BusinessOrders() {
     }
   };
 
+  if (loading) return <div className="h-screen bg-[#0B0E14] flex flex-col items-center justify-center z-[100] relative"><Loader2 className="animate-spin text-[#3063E9] mb-4" size={50} /></div>;
+
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white font-sans selection:bg-[#3063E9]/30 print:bg-white print:text-black">
       
-      {/* SIDEBAR (Yazdırırken Gizlenir) */}
+      {/* 🚀 SİBER YAMA: TAM TAKIM SOL MENÜ */}
       <aside className={`fixed top-0 left-0 h-full w-72 bg-[#0F1219] border-r border-white/5 p-8 flex flex-col z-[70] transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 print:hidden`}>
         <div className="flex items-center gap-3 mb-12">
-          <div className="w-10 h-10 bg-[#3063E9] rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20"><Rocket size={22} /></div>
-          <span className="text-xl font-black italic uppercase leading-none">Durmaz<span className="text-[#3063E9]">SaaS</span></span>
+          <div className="w-10 h-10 bg-[#3063E9] rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20"><Rocket size={22} className="text-white" /></div>
+          <span className="text-xl font-black italic uppercase leading-none text-white">Durmaz<span className="text-[#3063E9]">SaaS</span></span>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden ml-auto text-gray-500"><X /></button>
         </div>
         <nav className="space-y-2 flex-1">
           <Link href={`/portal/${code}/business`} className="flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white rounded-xl font-bold transition-all"><LayoutDashboard size={20}/> Komuta Merkezi</Link>
-          <button className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9]/10 border-l-4 border-[#3063E9] text-white rounded-r-xl font-bold transition-all"><ShoppingCart size={20} className="text-[#3063E9]" /> Gelen Siparişler</button>
           <Link href={`/portal/${code}/business/products`} className="flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white rounded-xl font-bold transition-all"><Package size={20}/> Ürün Yönetimi</Link>
+          <button className="w-full flex items-center gap-4 px-5 py-4 bg-[#3063E9]/10 border-l-4 border-[#3063E9] text-white rounded-r-xl font-bold transition-all"><ShoppingCart size={20} className="text-[#3063E9]" /> Gelen Siparişler</button>
+          <Link href={`/portal/${code}/business/billing`} className="flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white rounded-xl font-bold transition-all"><FileText size={20}/> Fatura Yönetimi</Link>
           <Link href={`/portal/${code}/business/customers`} className="flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white rounded-xl font-bold transition-all"><Users size={20}/> Bayi Ağı</Link>
           <Link href={`/portal/${code}/business/expenses`} className="flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white rounded-xl font-bold transition-all"><TrendingDown size={20}/> Gider Takibi</Link>
+          <Link href={`/portal/${code}/business/settings`} className="flex items-center gap-4 px-5 py-4 text-gray-500 hover:text-white rounded-xl font-bold transition-all"><Settings size={20}/> Sistem Ayarları</Link>
         </nav>
+        <button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} className="mt-auto flex items-center gap-4 px-5 py-4 text-red-500/50 hover:text-red-500 border border-red-500/10 rounded-xl font-bold transition-all hover:bg-red-500/10 group">
+          <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" /> Güvenli Çıkış
+        </button>
       </aside>
 
       <main className="lg:ml-72 p-6 md:p-10 relative print:hidden">
@@ -337,67 +375,99 @@ export default function BusinessOrders() {
         <div className="flex flex-col md:flex-row justify-between gap-4 mb-8">
           <div className="flex-1 relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-            <input type="text" placeholder="Sipariş veya müşteri ara..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#0F1219] border border-white/5 rounded-2xl py-4 pl-12 text-sm text-white outline-none focus:border-[#3063E9]/50 transition-all" />
+            <input type="text" placeholder="Sipariş veya müşteri ara..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-[#0F1219] border border-white/5 rounded-2xl py-4 pl-12 text-sm font-bold text-white outline-none focus:border-[#3063E9]/50 transition-all shadow-inner" />
           </div>
-          <button onClick={() => setIsCreateOrderOpen(true)} className="px-8 py-4 bg-[#3063E9] text-white rounded-2xl font-black text-[11px] uppercase shadow-lg shadow-blue-900/30 flex items-center justify-center gap-2 hover:scale-105 transition-all"><Plus size={18} /> Yeni Sipariş</button>
+          <button onClick={() => setIsCreateOrderOpen(true)} className="px-8 py-4 bg-[#3063E9] text-white rounded-2xl font-black text-[11px] uppercase shadow-[0_0_30px_rgba(48,99,233,0.3)] flex items-center justify-center gap-2 hover:scale-105 transition-all"><Plus size={18} /> Yeni Sipariş / POS</button>
         </div>
 
+        {/* 🚀 DİNAMİK İŞ AKIŞLI SİPARİŞ LİSTESİ */}
         <div className="space-y-4">
-          {orders.filter(o => (o.customer_name || "").toLowerCase().includes((searchQuery || "").toLowerCase())).map((o, idx) => (
-            <div key={idx} className="bg-[#0F1219] border border-white/5 p-5 rounded-3xl flex flex-col md:grid md:grid-cols-12 gap-4 items-center group hover:border-[#3063E9]/30 transition-all relative overflow-hidden">
-              
-              <div className="md:col-span-4 flex items-center gap-4 w-full relative z-10">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all 
-                    ${o.is_invoiced && o.invoice_status !== 'Müşteri Onayı Bekliyor' ? 'bg-green-500/10 border-green-500/20 text-green-500' : 
-                      o.is_invoiced && o.invoice_status === 'Müşteri Onayı Bekliyor' ? 'bg-orange-500/10 border-orange-500/20 text-orange-500' : 
-                      'bg-[#3063E9]/10 border-[#3063E9]/20 text-[#3063E9]'}`}
-                >
-                  {o.is_invoiced && o.invoice_status !== 'Müşteri Onayı Bekliyor' ? <ReceiptText size={20} /> : 
-                   o.is_invoiced && o.invoice_status === 'Müşteri Onayı Bekliyor' ? <ShieldAlert size={20} /> : 
-                   <ShoppingCart size={20} />}
+          {orders.length === 0 ? (
+             <div className="py-20 flex flex-col items-center justify-center text-center opacity-50 bg-[#0F1219] rounded-[32px] border border-dashed border-white/10">
+                <ShoppingCart size={48} className="mx-auto text-gray-600 mb-4" />
+                <h3 className="text-sm font-black uppercase mb-2 tracking-widest">Sipariş Radarı Boş</h3>
+                <p className="text-xs font-bold text-gray-500">Müşterilerinizden henüz yeni bir sipariş gelmedi.</p>
+             </div>
+          ) : (
+            orders.filter(o => (o.customer_name || "").toLowerCase().includes((searchQuery || "").toLowerCase())).map((o, idx) => (
+                <div key={idx} className="bg-[#0F1219] border border-white/5 p-5 rounded-3xl flex flex-col md:grid md:grid-cols-12 gap-4 items-center group hover:border-[#3063E9]/30 transition-all relative overflow-hidden shadow-lg">
+                
+                <div className="md:col-span-4 flex items-center gap-4 w-full relative z-10">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all 
+                        ${o.status === 'Tamamlandı' ? 'bg-green-500/10 border-green-500/20 text-green-500 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 
+                        o.status === 'Onaya Gönderildi' ? 'bg-orange-500/10 border-orange-500/20 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.2)]' : 
+                        o.status === 'Hazırlanıyor' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 
+                        'bg-[#3063E9]/10 border-[#3063E9]/20 text-[#3063E9] shadow-[0_0_15px_rgba(48,99,233,0.2)]'}`}
+                    >
+                    {o.status === 'Tamamlandı' ? <ReceiptText size={20} /> : 
+                     o.status === 'Onaya Gönderildi' ? <ShieldAlert size={20} /> : 
+                     o.status === 'Hazırlanıyor' ? <Truck size={20} /> :
+                     <ShoppingCart size={20} />}
+                    </div>
+                    <div><h3 className="text-sm font-black uppercase line-clamp-1 text-white">{o.customer_name}</h3><p className="text-[9px] text-[#3063E9] font-bold tracking-widest mt-1">{o.cari_code}</p></div>
                 </div>
-                <div><h3 className="text-sm font-black uppercase line-clamp-1">{o.customer_name}</h3><p className="text-[9px] text-gray-500 font-bold tracking-widest">{o.cari_code}</p></div>
-              </div>
-              
-              <div className="md:col-span-2 w-full font-bold text-gray-400 text-[10px] relative z-10">{o.id}<p className="text-[8px] text-gray-600 mt-1">{o.date}</p></div>
-              
-              <div className="md:col-span-3 w-full text-center relative z-10">
-                {o.is_invoiced && o.invoice_status !== 'Müşteri Onayı Bekliyor' ? (
-                  <span className="px-3 py-1 bg-green-500/10 text-green-500 border border-green-500/20 rounded-lg text-[8px] font-black uppercase flex items-center justify-center gap-1 w-max mx-auto"><CheckCircle2 size={10}/> Mutabakat Sağlandı</span>
-                ) : o.is_invoiced && o.invoice_status === 'Müşteri Onayı Bekliyor' ? (
-                  <span className="px-3 py-1 bg-orange-500/10 text-orange-500 border border-orange-500/20 rounded-lg text-[8px] font-black uppercase flex items-center justify-center gap-1 w-max mx-auto"><Clock size={10}/> Onay Bekliyor</span>
-                ) : (
-                  <span className="px-3 py-1 bg-blue-500/10 text-blue-500 border border-blue-500/20 rounded-lg text-[8px] font-black uppercase flex items-center justify-center gap-1 w-max mx-auto">Beklemede</span>
-                )}
-              </div>
-              
-              <div className="md:col-span-2 w-full text-right text-lg font-black italic relative z-10">{o.total_amount.toLocaleString('tr-TR')} ₺</div>
-              
-              <div className="md:col-span-1 w-full flex justify-end gap-2 relative z-10">
-                {!o.is_invoiced ? (
-                  <button 
-                    onClick={() => handleSendToApproval(o)} 
-                    disabled={actionLoading === o.id}
-                    title="Müşteri Onayına Gönder"
-                    className="p-2 bg-[#3063E9]/20 text-[#3063E9] hover:bg-[#3063E9] hover:text-white rounded-xl transition-all disabled:opacity-50"
-                  >
-                    {actionLoading === o.id ? <Loader2 size={18} className="animate-spin" /> : <FileCheck size={18} />}
-                  </button>
-                ) : o.is_invoiced && o.invoice_status === 'Müşteri Onayı Bekliyor' ? (
-                  <button 
-                    onClick={() => handleCustomerApproved(o)} 
-                    disabled={actionLoading === o.id}
-                    title="Müşteri Onayını Teyit Et ve Bakiyeye İşle"
-                    className="p-2 bg-orange-500/20 text-orange-500 hover:bg-orange-500 hover:text-white rounded-xl transition-all disabled:opacity-50"
-                  >
-                    {actionLoading === o.id ? <Loader2 size={18} className="animate-spin" /> : <ShieldAlert size={18} />}
-                  </button>
-                ) : null}
+                
+                <div className="md:col-span-2 w-full font-bold text-gray-500 text-[10px] relative z-10 uppercase tracking-widest">NO: {o.id.slice(0,8)}<p className="text-[9px] text-gray-400 mt-1">{o.date}</p></div>
+                
+                {/* DURUM ROZETİ */}
+                <div className="md:col-span-3 w-full text-center relative z-10">
+                    {o.status === 'Tamamlandı' ? (
+                      <span className="px-3 py-1.5 bg-green-500/10 text-green-500 border border-green-500/20 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1 w-max mx-auto"><CheckCircle2 size={12}/> Mutabakat Sağlandı</span>
+                    ) : o.status === 'Onaya Gönderildi' ? (
+                      <span className="px-3 py-1.5 bg-orange-500/10 text-orange-500 border border-orange-500/20 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1 w-max mx-auto animate-pulse"><Clock size={12}/> Müşteri Onayı Bekliyor</span>
+                    ) : o.status === 'Hazırlanıyor' ? (
+                      <span className="px-3 py-1.5 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1 w-max mx-auto"><Truck size={12}/> Hazırlanıyor</span>
+                    ) : (
+                      <span className="px-3 py-1.5 bg-[#3063E9]/10 text-[#3063E9] border border-[#3063E9]/20 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-1 w-max mx-auto"><Package size={12}/> Yeni Sipariş</span>
+                    )}
+                </div>
+                
+                <div className="md:col-span-2 w-full text-right text-lg font-black italic text-white relative z-10">{o.total_amount.toLocaleString('tr-TR')} ₺</div>
+                
+                {/* İŞLEM BUTONLARI (DİNAMİK) */}
+                <div className="md:col-span-1 w-full flex justify-end gap-2 relative z-10 border-t md:border-t-0 border-white/5 pt-4 md:pt-0 mt-2 md:mt-0">
+                    
+                    {/* YENİ SİPARİŞ İSE -> HAZIRLANIYOR YAP */}
+                    {o.status === 'Yeni' && (
+                        <button 
+                            onClick={() => handleSetPreparing(o)} 
+                            disabled={actionLoading === o.id}
+                            title="Siparişi Hazırlanıyor Aşamasına Al"
+                            className="p-2.5 bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500 hover:text-white rounded-xl transition-all disabled:opacity-50 hover:scale-110"
+                        >
+                            {actionLoading === o.id ? <Loader2 size={18} className="animate-spin" /> : <PlayCircle size={18} />}
+                        </button>
+                    )}
 
-                <button onClick={() => setSelectedOrder(o)} className="p-2 bg-white/5 hover:bg-[#3063E9] rounded-xl transition-all"><Eye size={18} /></button>
-              </div>
-            </div>
-          ))}
+                    {/* HAZIRLANIYOR İSE -> ONAYA GÖNDER */}
+                    {o.status === 'Hazırlanıyor' && (
+                        <button 
+                            onClick={() => handleSendToApproval(o)} 
+                            disabled={actionLoading === o.id}
+                            title="Faturayı Kes ve Müşteri Onayına Gönder"
+                            className="p-2.5 bg-[#3063E9]/20 text-[#3063E9] hover:bg-[#3063E9] hover:text-white rounded-xl transition-all disabled:opacity-50 hover:scale-110"
+                        >
+                            {actionLoading === o.id ? <Loader2 size={18} className="animate-spin" /> : <FileCheck size={18} />}
+                        </button>
+                    )}
+
+                    {/* ONAY BEKLİYOR İSE -> ZORLA ONAYLA (BAKİYEYE İŞLE) */}
+                    {o.status === 'Onaya Gönderildi' && (
+                        <button 
+                            onClick={() => handleCustomerApproved(o)} 
+                            disabled={actionLoading === o.id}
+                            title="Müşteri Onayını Teyit Et (Bakiyeye Borç İşle)"
+                            className="p-2.5 bg-orange-500/20 text-orange-500 hover:bg-orange-500 hover:text-white rounded-xl transition-all disabled:opacity-50 hover:scale-110"
+                        >
+                            {actionLoading === o.id ? <Loader2 size={18} className="animate-spin" /> : <ShieldAlert size={18} />}
+                        </button>
+                    )}
+
+                    <button onClick={() => setSelectedOrder(o)} className="p-2.5 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-all hover:scale-110"><Eye size={18} /></button>
+                </div>
+                </div>
+            ))
+          )}
         </div>
       </main>
 
@@ -407,13 +477,13 @@ export default function BusinessOrders() {
           <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsCreateOrderOpen(false)} />
           <div className="relative w-full max-w-[1200px] bg-[#0B0E14] border-l border-white/10 shadow-2xl flex flex-col h-full animate-in slide-in-from-right duration-500">
             <div className="p-8 border-b border-white/5 flex justify-between items-center bg-[#0F1219]">
-              <div><h3 className="text-2xl font-black italic uppercase leading-none">Siber POS Terminali</h3><p className="text-[10px] text-[#3063E9] font-black uppercase tracking-[0.3em] mt-2">Hızlı Satış & Sipariş Modu</p></div>
+              <div><h3 className="text-2xl font-black italic uppercase leading-none text-white">Siber POS Terminali</h3><p className="text-[10px] text-[#3063E9] font-black uppercase tracking-[0.3em] mt-2">Hızlı Satış & Sipariş Modu</p></div>
               <button onClick={() => setIsCreateOrderOpen(false)} className="p-3 bg-white/5 hover:bg-red-500 rounded-2xl transition-all"><X size={24} /></button>
             </div>
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
               <div className="lg:w-2/3 flex flex-col border-r border-white/5 bg-[#0F1219]/30 overflow-hidden">
                 <div className="p-6 border-b border-white/5 bg-[#0F1219]/50">
-                    <input type="text" placeholder="Katalogda ara..." value={manualProductSearch} onChange={e => setManualProductSearch(e.target.value)} className="w-full bg-[#020408] border border-white/10 rounded-2xl p-4 text-sm font-bold text-white outline-none focus:border-[#3063E9]/50" />
+                    <input type="text" placeholder="Katalogda ürün ara..." value={manualProductSearch} onChange={e => setManualProductSearch(e.target.value)} className="w-full bg-[#020408] border border-white/10 rounded-2xl p-4 text-sm font-bold text-white outline-none focus:border-[#3063E9]/50 shadow-inner" />
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 sm:grid-cols-2 gap-4 custom-scrollbar">
                   {COMPANY_PRODUCTS.filter(p => p.name.toLowerCase().includes(manualProductSearch.toLowerCase())).map(p => {
@@ -422,9 +492,9 @@ export default function BusinessOrders() {
                       <div key={p.id} className="bg-[#0F1219] border border-white/5 p-5 rounded-[32px] space-y-4 hover:border-[#3063E9]/40 transition-all shadow-xl group">
                         <div className="flex justify-between items-start">
                           <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/5 group-hover:border-[#3063E9]/30 transition-all"><Package size={24} className="text-gray-500" /></div>
-                          <div className="text-right"><p className="text-[8px] font-black text-gray-500 uppercase mb-1">Liste Fiyatı</p><span className="text-sm font-black text-[#3063E9]">{p.price} ₺</span></div>
+                          <div className="text-right"><p className="text-[8px] font-black text-gray-500 uppercase mb-1 tracking-widest">Liste Fiyatı</p><span className="text-sm font-black text-[#3063E9]">{p.price} ₺</span></div>
                         </div>
-                        <h4 className="text-xs font-black uppercase h-8 line-clamp-2 leading-tight">{p.name}</h4>
+                        <h4 className="text-xs font-black uppercase h-8 line-clamp-2 leading-tight text-white">{p.name}</h4>
                         <div className="bg-[#020408] p-4 rounded-2xl border border-white/5 space-y-3">
                           <div className="flex gap-2">
                             <div className="flex-1 flex items-center justify-between bg-[#0F1219] p-1 rounded-xl border border-white/5">
@@ -435,11 +505,11 @@ export default function BusinessOrders() {
                             <select value={st.unit} onChange={e => updateTempState(p.id, 'unit', e.target.value)} className="bg-[#0F1219] border border-white/5 rounded-xl px-3 text-[10px] font-black outline-none uppercase">{COMPANY_UNITS.map(u => <option key={u} value={u}>{u}</option>)}</select>
                           </div>
                           <div className="flex items-center gap-3 bg-[#0F1219] p-2 rounded-xl border border-white/5">
-                            <span className="text-[9px] font-black text-gray-500 uppercase pl-1">B.Fiyat:</span>
+                            <span className="text-[9px] font-black text-gray-500 uppercase pl-1 tracking-widest">Özel Fiyat:</span>
                             <input type="number" value={st.customPrice} onChange={e => updateTempState(p.id, 'customPrice', Number(e.target.value))} className="bg-transparent w-full text-right text-xs font-black text-[#3063E9] outline-none" />
                           </div>
                         </div>
-                        <button onClick={() => addToCart(p)} className="w-full py-4 bg-[#3063E9] text-white rounded-2xl font-black text-[10px] uppercase flex items-center justify-center gap-2 hover:bg-blue-600 transition-all shadow-lg active:scale-95"><ShoppingCart size={16}/> Sepete Ekle</button>
+                        <button onClick={() => addToCart(p)} className="w-full py-4 bg-[#3063E9] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-600 transition-all shadow-lg active:scale-95"><ShoppingCart size={16}/> Fişe Ekle</button>
                       </div>
                     );
                   })}
@@ -448,8 +518,8 @@ export default function BusinessOrders() {
 
               <div className="lg:w-1/3 flex flex-col bg-[#020408]">
                 <div className="p-8 border-b border-white/5">
-                  <label className="text-[10px] font-black text-gray-500 uppercase mb-3 block">Müşteri Seçimi</label>
-                  <select value={selectedCariForManual} onChange={e => setSelectedCariForManual(e.target.value)} className="w-full bg-[#0F1219] border border-white/10 rounded-2xl p-4 text-xs font-black outline-none focus:border-[#3063E9] uppercase transition-all">
+                  <label className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest block">Müşteri Seçimi</label>
+                  <select value={selectedCariForManual} onChange={e => setSelectedCariForManual(e.target.value)} className="w-full bg-[#0F1219] border border-white/10 rounded-2xl p-4 text-xs font-black outline-none focus:border-[#3063E9] uppercase transition-all shadow-inner">
                     <option value="">-- AĞDAN MÜŞTERİ SEÇİNİZ --</option>
                     {dbCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -457,16 +527,16 @@ export default function BusinessOrders() {
                 <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
                   {manualCart.map((i, idx) => (
                     <div key={idx} className="bg-[#0F1219]/50 p-4 rounded-2xl relative border border-white/5 group">
-                      <h5 className="text-[11px] font-black uppercase text-white leading-tight">{i.product.name}</h5>
-                      <div className="flex justify-between items-end mt-2"><div className="text-[9px] font-bold text-gray-500">{i.qty} {i.unit} x {i.customPrice} ₺</div><div className="text-sm font-black italic text-[#3063E9]">{(i.qty * i.customPrice).toLocaleString('tr-TR')} ₺</div></div>
+                      <h5 className="text-[11px] font-black uppercase text-white leading-tight pr-6">{i.product.name}</h5>
+                      <div className="flex justify-between items-end mt-2"><div className="text-[9px] font-bold text-gray-500 tracking-widest">{i.qty} {i.unit} x {i.customPrice} ₺</div><div className="text-sm font-black italic text-[#3063E9]">{(i.qty * i.customPrice).toLocaleString('tr-TR')} ₺</div></div>
                       <button onClick={() => setManualCart(prev => prev.filter((_, ci) => ci !== idx))} className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg"><Trash2 size={12}/></button>
                     </div>
                   ))}
-                  {manualCart.length === 0 && <div className="h-full flex flex-col items-center justify-center opacity-10"><ShoppingCart size={64} /><p className="text-xs font-black mt-4 uppercase">Fiş Boş</p></div>}
+                  {manualCart.length === 0 && <div className="h-full flex flex-col items-center justify-center opacity-10"><ShoppingCart size={64} /><p className="text-xs font-black mt-4 uppercase tracking-widest">Fiş Boş</p></div>}
                 </div>
                 <div className="p-8 border-t border-white/5 bg-[#0F1219]">
-                  <div className="flex justify-between items-center mb-6"><div><p className="text-[9px] text-gray-500 uppercase font-black mb-1">Genel Toplam</p><p className="text-4xl font-black italic text-white">{manualCartTotal.toLocaleString('tr-TR')} <span className="text-sm text-[#3063E9] not-italic">₺</span></p></div></div>
-                  <button onClick={handleCreateManualOrder} disabled={!selectedCariForManual || manualCart.length === 0 || createLoading} className="w-full py-5 bg-[#3063E9] disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-[24px] font-black uppercase tracking-[0.2em] text-xs shadow-2xl flex items-center justify-center gap-3 transition-all hover:bg-blue-600 active:scale-95">
+                  <div className="flex justify-between items-center mb-6"><div><p className="text-[9px] text-gray-500 uppercase font-black tracking-widest mb-1">Genel Toplam</p><p className="text-4xl font-black italic text-white">{manualCartTotal.toLocaleString('tr-TR')} <span className="text-sm text-[#3063E9] not-italic">₺</span></p></div></div>
+                  <button onClick={handleCreateManualOrder} disabled={!selectedCariForManual || manualCart.length === 0 || createLoading} className="w-full py-5 bg-[#3063E9] disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-[24px] font-black uppercase tracking-[0.2em] text-[11px] shadow-[0_0_30px_rgba(48,99,233,0.3)] flex items-center justify-center gap-3 transition-all hover:bg-blue-600 active:scale-95 disabled:shadow-none">
                     {createLoading ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle2 size={20} />} Siparişi Onayla ve İşle
                   </button>
                 </div>
@@ -481,10 +551,10 @@ export default function BusinessOrders() {
         <div className="fixed inset-0 z-[100] flex justify-center items-center p-4 print:static print:p-0 print:block">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm print:hidden" onClick={() => setSelectedOrder(null)} />
           
-          <div className="relative w-full max-w-[500px] bg-[#0F1219] border border-white/10 shadow-2xl rounded-[40px] flex flex-col max-h-[90vh] print:max-h-none print:w-full print:border-none print:shadow-none print:bg-white print:text-black print:rounded-none">
+          <div className="relative w-full max-w-[500px] bg-[#0F1219] border border-white/10 shadow-2xl rounded-[40px] flex flex-col max-h-[90vh] print:max-h-none print:w-full print:border-none print:shadow-none print:bg-white print:text-black print:rounded-none animate-in zoom-in-95 duration-200">
             
             <div className="p-6 border-b border-white/5 flex justify-between items-center print:hidden bg-[#0B0E14]">
-                <h3 className="text-lg font-black uppercase">Sipariş Ekstresi</h3>
+                <h3 className="text-lg font-black uppercase italic text-white flex items-center gap-2"><FileText className="text-[#3063E9]"/> Sipariş Fişi</h3>
                 <div className="flex gap-2">
                     <button onClick={() => window.print()} className="p-2 bg-[#3063E9]/20 text-[#3063E9] hover:bg-[#3063E9] hover:text-white rounded-xl transition-all"><Printer size={20} /></button>
                     <button onClick={() => setSelectedOrder(null)} className="p-2 bg-white/5 hover:bg-red-500 rounded-xl transition-all"><X size={20} /></button>
@@ -495,29 +565,29 @@ export default function BusinessOrders() {
                 
                 <div className="text-center mb-8 border-b border-white/10 print:border-black/20 pb-8">
                     <div className="w-16 h-16 bg-[#3063E9] rounded-2xl flex items-center justify-center mx-auto mb-4 print:bg-black print:text-white print:rounded-none"><Rocket size={32} /></div>
-                    <h2 className="text-2xl font-black italic uppercase">DURMAZ SAAS</h2>
-                    <p className="text-xs text-gray-500 font-bold mt-2 print:text-gray-700">Resmi Sipariş & Fatura Ekstresi</p>
-                    <div className="mt-6 flex justify-between text-left text-xs bg-white/5 p-4 rounded-2xl print:bg-transparent print:p-0 print:border-t print:border-black/20 print:pt-4">
-                        <div><p className="text-gray-500 uppercase text-[9px] print:text-gray-700">Müşteri</p><p className="font-black uppercase">{selectedOrder.customer_name}</p></div>
-                        <div className="text-right"><p className="text-gray-500 uppercase text-[9px] print:text-gray-700">Tarih / No</p><p className="font-black">{selectedOrder.date} <br/> {selectedOrder.id.slice(0,8)}</p></div>
+                    <h2 className="text-2xl font-black italic uppercase text-white print:text-black">DURMAZ SAAS</h2>
+                    <p className="text-[10px] text-gray-500 font-bold mt-2 uppercase tracking-widest print:text-gray-700">Resmi Sipariş & Fatura Ekstresi</p>
+                    <div className="mt-6 flex justify-between text-left text-xs bg-[#020408] p-4 rounded-2xl border border-white/5 print:bg-transparent print:p-0 print:border-t print:border-black/20 print:pt-4">
+                        <div><p className="text-gray-500 uppercase tracking-widest text-[9px] print:text-gray-700 mb-1">Müşteri Cari</p><p className="font-black uppercase text-white print:text-black">{selectedOrder.customer_name}</p></div>
+                        <div className="text-right"><p className="text-gray-500 uppercase tracking-widest text-[9px] print:text-gray-700 mb-1">Tarih / Fiş No</p><p className="font-black text-white print:text-black">{selectedOrder.date} <br/> <span className="text-[10px] text-[#3063E9]">{selectedOrder.id.slice(0,8).toUpperCase()}</span></p></div>
                     </div>
                 </div>
 
                 <div className="space-y-3 mb-8">
                     {selectedOrder.items && selectedOrder.items.map((it: OrderItem, i: number) => (
                         <div key={i} className="flex justify-between items-center pb-3 border-b border-white/5 print:border-black/10">
-                            <div className="flex-1">
-                                <h5 className="text-xs font-black uppercase">{it.name}</h5>
-                                <p className="text-[9px] text-gray-500 font-bold print:text-gray-700">{it.qty} {it.unit || 'AD'} x {it.price} ₺</p>
+                            <div className="flex-1 pr-4">
+                                <h5 className="text-xs font-black uppercase text-white print:text-black">{it.name}</h5>
+                                <p className="text-[9px] text-gray-500 font-bold print:text-gray-700 mt-0.5 tracking-widest">{it.qty} {it.unit || 'AD'} x {it.price} ₺</p>
                             </div>
-                            <span className="text-sm font-black italic">{(it.qty * it.price).toLocaleString('tr-TR')} ₺</span>
+                            <span className="text-sm font-black italic text-[#3063E9] print:text-black">{(it.qty * it.price).toLocaleString('tr-TR')} ₺</span>
                         </div>
                     ))}
                 </div>
 
-                <div className="flex justify-between items-center bg-[#3063E9]/10 p-6 rounded-3xl border border-[#3063E9]/20 print:bg-gray-100 print:border-black/30 print:rounded-none">
-                    <p className="text-sm text-[#3063E9] uppercase font-black print:text-black">Genel Toplam</p>
-                    <p className="text-3xl font-black italic text-[#3063E9] print:text-black">{selectedOrder.total_amount.toLocaleString('tr-TR')} ₺</p>
+                <div className="flex justify-between items-center bg-gradient-to-r from-[#3063E9]/20 to-transparent p-6 rounded-3xl border border-[#3063E9]/20 print:bg-gray-100 print:border-black/30 print:rounded-none">
+                    <p className="text-sm text-[#3063E9] uppercase font-black tracking-widest print:text-black">Genel Toplam</p>
+                    <p className="text-3xl font-black italic text-white print:text-black">{selectedOrder.total_amount.toLocaleString('tr-TR')} ₺</p>
                 </div>
             </div>
           </div>

@@ -33,7 +33,7 @@ export default function CustomerOrders() {
       setLoading(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.push('/portal'); return; }
+        if (!user) { router.push('/login'); return; }
 
         const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
         if (profileData) setProfile(profileData);
@@ -77,21 +77,27 @@ export default function CustomerOrders() {
     fetchData();
   }, [code, router, supabase]);
 
-  // --- 🚀 MÜŞTERİ MUTABAKAT ONAY MOTORU ---
+  // --- 🚀 MÜŞTERİ MUTABAKAT ONAY MOTORU (DÜZELTİLDİ) ---
   const handleApproveInvoice = async (order: any) => {
     if (!order.invoice_id || !order.customer_id || !order.company_id) return;
     
     setActionLoading(order.id);
     try {
-      // 1. Faturayı "Ödenmedi" (Onaylandı) olarak güncelle
+      // 1. Faturayı "Ödenmedi" olarak güncelle
       const { error: invError } = await supabase
         .from('invoices')
         .update({ status: 'Ödenmedi' })
         .eq('id', order.invoice_id);
-
       if (invError) throw invError;
 
-      // 2. İşletmenin bakiyesine borç olarak işle (Transactions)
+      // 2. Siparişi "Tamamlandı" olarak güncelle (Toptancı Ekranı İçin)
+      const { error: ordError } = await supabase
+        .from('orders')
+        .update({ status: 'Tamamlandı' })
+        .eq('id', order.id);
+      if (ordError) throw ordError;
+
+      // 3. Finansal Hareket Ekle (İşletmenin bakiyesine borç)
       const { error: transError } = await supabase
         .from('transactions')
         .insert([{
@@ -99,15 +105,27 @@ export default function CustomerOrders() {
           customer_id: order.customer_id,
           type: 'FATURA',
           amount: order.total_amount,
-          description: `Sipariş Mutabakatı Onaylandı (${order.id.slice(0,8)})`
+          description: `Sipariş Mutabakatı Onaylandı (${order.id.slice(0,8)})`,
+          items: order.items // Detayları da aktarıyoruz
         }]);
-
       if (transError) throw transError;
 
-      // 3. UI Güncelle
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, invoice_status: 'Ödenmedi' } : o));
+      // 4. Müşterinin Bakiyesine Tutar Ekle (Customer Tablosu Güncellemesi)
+      const { data: custData } = await supabase
+        .from('customers')
+        .select('balance')
+        .eq('id', order.customer_id)
+        .single();
+      
+      if (custData) {
+          const newBalance = Number(custData.balance) + Number(order.total_amount);
+          await supabase.from('customers').update({ balance: newBalance }).eq('id', order.customer_id);
+      }
+
+      // 5. UI Güncelle (Ekrandaki listeyi yenile)
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'Tamamlandı', invoice_status: 'Ödenmedi' } : o));
       setSelectedOrder(null);
-      alert(`✅ Mutabakat Sağlandı! Tutar hesabınıza işlendi.`);
+      alert(`✅ Mutabakat Sağlandı! Sipariş onaylandı ve tutar ekstrenize yansıtıldı.`);
     } catch (e: any) {
       alert(`Onaylama sırasında siber hata oluştu: ${e.message}`);
     } finally {
@@ -158,7 +176,7 @@ export default function CustomerOrders() {
           </Link>
         </nav>
 
-        <button onClick={() => supabase.auth.signOut().then(() => router.push('/portal'))} className="mt-auto flex items-center gap-4 px-5 py-4 text-red-500/50 hover:text-red-500 border border-red-500/10 rounded-xl font-bold transition-all hover:bg-red-500/10 group">
+        <button onClick={() => supabase.auth.signOut().then(() => router.push('/login'))} className="mt-auto flex items-center gap-4 px-5 py-4 text-red-500/50 hover:text-red-500 border border-red-500/10 rounded-xl font-bold transition-all hover:bg-red-500/10 group">
           <LogOut size={20} className="group-hover:-translate-x-1 transition-transform" /> Sistemden Çık
         </button>
       </aside>
@@ -319,7 +337,7 @@ export default function CustomerOrders() {
                       className="w-full py-5 bg-gradient-to-r from-[#BC13FE] to-purple-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-[0_0_30px_rgba(188,19,254,0.4)] flex items-center justify-center gap-3 hover:scale-[1.02] transition-all"
                     >
                       {actionLoading === selectedOrder.id ? <Loader2 size={20} className="animate-spin" /> : <ShieldCheck size={20} />} 
-                      {actionLoading === selectedOrder.id ? 'ONAYLANIYOR...' : 'Ekstreyi Onaylıyorum'}
+                      {actionLoading === selectedOrder.id ? 'ONAYLANIYOR VE İŞLENİYOR...' : 'Ekstreyi Onaylıyorum (Bakiye Yazılacak)'}
                     </button>
                   </div>
                 )}

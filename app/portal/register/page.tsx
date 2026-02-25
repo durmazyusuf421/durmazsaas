@@ -30,7 +30,6 @@ export default function GlobalCustomerRegister() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
 
-  // 🎲 Rastgele Benzersiz Cari Kod Oluşturma (Örn: CARI-84729)
   const generateCariCode = () => {
     const randomNum = Math.floor(10000 + Math.random() * 90000);
     return `CARI-${randomNum}`;
@@ -43,7 +42,6 @@ export default function GlobalCustomerRegister() {
     const newCariCode = generateCariCode();
 
     try {
-      // 1. Supabase Auth ile Kullanıcıyı Kaydet
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -53,7 +51,6 @@ export default function GlobalCustomerRegister() {
       if (authError) throw authError;
 
       if (authData?.user) {
-        // 2. Profilini Global Müşteri Bilgileriyle Güncelle
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
@@ -63,13 +60,12 @@ export default function GlobalCustomerRegister() {
             tax_office: formData.taxOffice,
             billing_address: formData.address,
             global_cari_code: newCariCode,
-            is_customer: true // Bunun bir müşteri hesabı olduğunu işaretliyoruz
+            is_customer: true 
           })
           .eq('id', authData.user.id);
 
         if (profileError) throw profileError;
 
-        // 3. Başarılı Ekranını Göster
         setGeneratedCode(newCariCode);
       }
     } catch (err: any) {
@@ -79,7 +75,6 @@ export default function GlobalCustomerRegister() {
     }
   };
 
-  // ✅ BAŞARILI KAYIT EKRANI (PASAPORT)
   if (generatedCode) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F4F7FE] p-6 font-sans">
@@ -101,18 +96,18 @@ export default function GlobalCustomerRegister() {
             Bu kodu dükkan sahibine vererek sistemlerine anında kayıt olabilirsiniz.
           </p>
           
+          {/* 🚀 ROTAYI DÜZELTTİK: Direkt Siber Merkeze Gider */}
           <button 
-            onClick={() => window.location.href = '/portal'} 
+            onClick={() => router.push(`/portal/customer-hub`)} 
             className="w-full py-4 bg-[#1B2559] hover:bg-black text-white rounded-2xl font-black uppercase tracking-widest transition-all active:scale-95"
           >
-            Müşteri Girişi Yap
+            Siber Merkeze Giriş Yap
           </button>
         </div>
       </div>
     );
   }
 
-  // 📝 KAYIT FORMU EKRANI
   return (
     <div className="min-h-screen bg-[#F4F7FE] flex items-center justify-center p-4 py-12 font-sans">
       <div className="bg-white w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden border border-gray-100">

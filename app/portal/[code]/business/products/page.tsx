@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingCart, Users, Package, LogOut, 
   Loader2, Rocket, FileText, TrendingDown, Bell, Menu, X, 
   UserCircle, Plus, Search, Filter, Edit, Trash2, Image as ImageIcon,
-  CheckCircle2, Settings, Layers, Scale, Eye, EyeOff, ArrowUp, ArrowDown
+  CheckCircle2, Settings, Layers, Scale, Eye, EyeOff, ArrowUp, ArrowDown, AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -19,6 +19,7 @@ export default function BusinessProducts() {
   const [company, setCompany] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [companyNotFound, setCompanyNotFound] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Sekme (Tab) Sistemi
@@ -33,6 +34,14 @@ export default function BusinessProducts() {
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // --- 🚀 YENİ ÜRÜN HAFIZA ÇİPLERİ (STATE) ---
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductSku, setNewProductSku] = useState('');
+  const [newProductCategory, setNewProductCategory] = useState('');
+  const [newProductPrice, setNewProductPrice] = useState('');
+  const [newProductUnit, setNewProductUnit] = useState('');
+  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+
   // Form State'leri
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryVisible, setNewCategoryVisible] = useState(true);
@@ -62,6 +71,7 @@ export default function BusinessProducts() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setCompanyNotFound(false);
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { router.push('/login'); return; }
@@ -69,30 +79,32 @@ export default function BusinessProducts() {
         const { data: profileData } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
         if (profileData) setProfile(profileData);
 
-        let compData = null;
-        const { data: nameData } = await supabase.from('companies').select('*').eq('name', code).maybeSingle();
-        if (nameData) compData = nameData;
-        else if (code.length > 20) { 
-            const { data: idData } = await supabase.from('companies').select('*').eq('id', code).maybeSingle();
-            compData = idData;
+        // 🚀 SİBER YAMA: URL Boşluk Tuzağını (Sessiz Hatayı) Çözen Motor
+        let myCompany = null;
+        const { data: userCompanies } = await supabase.from('companies').select('*').eq('owner_id', user.id).limit(1);
+        
+        if (userCompanies && userCompanies.length > 0) {
+            myCompany = userCompanies[0];
         }
 
-        if (compData) {
-            setCompany(compData);
-            const { data: productsData } = await supabase.from('products').select('*').eq('company_id', compData.id).order('created_at', { ascending: false });
-            
+        if (!myCompany) {
+          const decodedCode = decodeURIComponent(code).trim();
+          const { data: codeCompanies } = await supabase.from('companies').select('*').ilike('name', decodedCode).limit(1);
+          if (codeCompanies && codeCompanies.length > 0) myCompany = codeCompanies[0];
+        }
+
+        if (myCompany) {
+            setCompany(myCompany);
+            const { data: productsData } = await supabase.from('products').select('*').eq('company_id', myCompany.id).order('created_at', { ascending: false });
             if (productsData && productsData.length > 0) {
               setProducts(productsData);
-            } else {
-              setProducts([
-                { id: 1, name: 'Premium Espresso Çekirdeği', sku: 'PRM-ESP-01', price: 850, stock: 124, unit: 'KG', category: 'Gıda & İçecek', status: 'active' },
-                { id: 2, name: 'Sade Karton Bardak 8oz', sku: 'KRT-BRD-8', price: 420, stock: 8, unit: 'KOLİ', category: 'Ambalaj & Paketleme', status: 'low_stock' },
-                { id: 3, name: 'Organik Sızma Zeytinyağı', sku: 'ORG-ZYT-5', price: 1250, stock: 0, unit: 'LT', category: 'Gıda & İçecek', status: 'out_of_stock' },
-              ]);
             }
+        } else {
+            setCompanyNotFound(true);
         }
       } catch (error) { 
-        console.error("Veri çekme hatası:", error); 
+        console.error("Veri çekme hatası:", error);
+        setCompanyNotFound(true);
       } finally { 
         setLoading(false); 
       }
@@ -101,14 +113,63 @@ export default function BusinessProducts() {
     if (code) fetchData();
   }, [code, router, supabase]);
 
-  if (loading) return (
-    <div className="h-screen bg-[#0B0E14] flex flex-col items-center justify-center z-[100] relative">
-      <Loader2 className="animate-spin text-[#3063E9]" size={50} />
-      <p className="text-[#3063E9]/50 font-black uppercase tracking-widest text-xs mt-4">Katalog Yükleniyor...</p>
-    </div>
-  );
+  // --- 🚀 YENİ ÜRÜNÜ VERİTABANINA YAZMA MOTORU ---
+  const handleAddProduct = async () => {
+    // 🚨 Sessiz hatayı engelle: Eksik veri varsa kullanıcıyı uyar!
+    if (!company?.id) {
+        alert("Siber Hata: İşletme kimliği bulunamadı! Lütfen sayfayı yenileyin.");
+        return;
+    }
+    if (!newProductName.trim() || !newProductSku.trim() || !newProductPrice) {
+        alert("Lütfen Ürün Adı, Stok Kodu ve Fiyat alanlarını doldurun.");
+        return;
+    }
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase()));
+    setIsSubmittingProduct(true);
+    try {
+      // Eğer kullanıcı kategori veya birim seçmezse varsayılanları (listenin ilk elemanlarını) ata
+      const categoryToSave = newProductCategory || categories.find(c => c.isVisible)?.name || 'Genel';
+      const unitToSave = newProductUnit || units[0]?.short || 'AD';
+
+      const newProductData = {
+        company_id: company.id,
+        name: newProductName,
+        sku: newProductSku,
+        category: categoryToSave,
+        price: parseFloat(newProductPrice),
+        unit: unitToSave,
+        stock: 0, 
+        status: 'out_of_stock' 
+      };
+
+      // Veritabanına Ateşle!
+      const { data, error } = await supabase.from('products').insert([newProductData]).select();
+
+      if (error) {
+          alert(`Siber Veritabanı Hatası: ${error.message}`);
+          throw error;
+      }
+
+      // Başarılı ise ürünleri tazele
+      const { data: updatedProducts } = await supabase.from('products').select('*').eq('company_id', company.id).order('created_at', { ascending: false });
+      if (updatedProducts) setProducts(updatedProducts);
+
+      // Formu temizle ve Modalı kapat
+      setNewProductName('');
+      setNewProductSku('');
+      setNewProductPrice('');
+      setNewProductCategory('');
+      setNewProductUnit('');
+      setIsAddModalOpen(false);
+
+      alert("✅ Ürün başarıyla eklendi ve kataloğa alındı!");
+
+    } catch (error: any) {
+      console.error("Ürün ekleme hatası:", error);
+    } finally {
+      setIsSubmittingProduct(false);
+    }
+  };
 
   // Kategori Yönetimi
   const handleAddCategory = () => {
@@ -143,6 +204,30 @@ export default function BusinessProducts() {
       setIsUnitModalOpen(false);
   };
   const handleDeleteUnit = (id: number) => setUnits(units.filter(u => u.id !== id));
+
+  if (loading) return (
+    <div className="h-screen bg-[#0B0E14] flex flex-col items-center justify-center z-[100] relative">
+      <Loader2 className="animate-spin text-[#3063E9] mb-4" size={50} />
+      <p className="text-[#3063E9]/50 font-black uppercase tracking-widest text-xs animate-pulse">Katalog Yükleniyor...</p>
+    </div>
+  );
+
+  if (companyNotFound) {
+      return (
+          <div className="h-screen bg-[#0B0E14] flex flex-col items-center justify-center text-center p-6">
+              <div className="w-24 h-24 bg-red-500/10 rounded-full flex items-center justify-center mb-6 border border-red-500/20">
+                  <AlertTriangle size={40} className="text-red-500" />
+              </div>
+              <h2 className="text-2xl font-black text-white uppercase italic mb-2">İşletme Kimliği Bulunamadı</h2>
+              <p className="text-gray-500 text-sm max-w-md mb-8">Bu hesaba ait geçerli bir işletme kaydı yok veya oturum zaman aşımına uğradı.</p>
+              <button onClick={async () => { await supabase.auth.signOut(); router.push('/login'); }} className="px-8 py-4 bg-[#3063E9] text-white rounded-2xl font-black uppercase text-[11px] tracking-[0.2em] shadow-[0_0_20px_rgba(48,99,233,0.3)]">
+                  Yeniden Giriş Yap
+              </button>
+          </div>
+      );
+  }
+
+  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.sku.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white font-sans selection:bg-[#3063E9]/30 overflow-x-hidden relative">
@@ -398,15 +483,32 @@ export default function BusinessProducts() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Ürün Adı</label>
-                            <input type="text" className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors" placeholder="Örn: Espresso Çekirdeği" />
+                            <input 
+                                type="text" 
+                                value={newProductName}
+                                onChange={(e) => setNewProductName(e.target.value)}
+                                className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors" 
+                                placeholder="Örn: Espresso Çekirdeği" 
+                            />
                         </div>
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Stok Kodu (SKU)</label>
-                            <input type="text" className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors" placeholder="Örn: ESP-001" />
+                            <input 
+                                type="text" 
+                                value={newProductSku}
+                                onChange={(e) => setNewProductSku(e.target.value)}
+                                className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors uppercase" 
+                                placeholder="Örn: ESP-001" 
+                            />
                         </div>
                         <div className="space-y-2">
                             <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Kategori Seçimi</label>
-                            <select className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors appearance-none">
+                            <select 
+                                value={newProductCategory}
+                                onChange={(e) => setNewProductCategory(e.target.value)}
+                                className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors appearance-none"
+                            >
+                                <option value="">Kategori Seçin...</option>
                                 {categories.filter(c => c.isVisible).map(cat => (
                                     <option key={cat.id} value={cat.name}>{cat.name}</option>
                                 ))}
@@ -415,11 +517,22 @@ export default function BusinessProducts() {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Birim Fiyat (₺)</label>
-                                <input type="number" className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors" placeholder="0.00" />
+                                <input 
+                                    type="number" 
+                                    value={newProductPrice}
+                                    onChange={(e) => setNewProductPrice(e.target.value)}
+                                    className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors" 
+                                    placeholder="0.00" 
+                                />
                             </div>
                             <div className="space-y-2">
                                 <label className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Birim</label>
-                                <select className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors appearance-none">
+                                <select 
+                                    value={newProductUnit}
+                                    onChange={(e) => setNewProductUnit(e.target.value)}
+                                    className="w-full bg-[#020408] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-[#3063E9] outline-none transition-colors appearance-none"
+                                >
+                                    <option value="">Seçiniz...</option>
                                     {units.map(u => (
                                         <option key={u.id} value={u.short}>{u.short} - {u.name}</option>
                                     ))}
@@ -431,8 +544,15 @@ export default function BusinessProducts() {
 
                 <div className="p-8 border-t border-white/5 bg-[#020408]/50 flex justify-end gap-4 relative z-10">
                     <button onClick={() => setIsAddModalOpen(false)} className="px-6 py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all">İptal</button>
-                    <button className="px-8 py-3 bg-[#3063E9] hover:bg-blue-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(48,99,233,0.3)] flex items-center gap-2">
-                        <CheckCircle2 size={16} /> Veritabanına Yaz
+                    
+                    {/* 🚀 SİBER YAMA: Buton Kilidi Görselleşti ve Sağlamlaştırıldı */}
+                    <button 
+                        onClick={handleAddProduct}
+                        disabled={isSubmittingProduct || !newProductName.trim() || !newProductSku.trim() || !newProductPrice}
+                        className="px-8 py-3 bg-[#3063E9] hover:bg-blue-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-[0_0_20px_rgba(48,99,233,0.3)] disabled:shadow-none flex items-center gap-2"
+                    >
+                        {isSubmittingProduct ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} 
+                        {isSubmittingProduct ? 'KAYDEDİLİYOR...' : 'VERİTABANINA YAZ'}
                     </button>
                 </div>
             </div>

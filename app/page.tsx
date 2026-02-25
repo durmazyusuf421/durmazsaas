@@ -34,8 +34,8 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-8">
             <a href="#ozellikler" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-white transition-all">Özellikler</a>
             <a href="#nasil-calisir" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-white transition-all">Nasıl Çalışır?</a>
-            {/* 🚀 SİBER YAMA: Akıllı Onboarding Motoruna Yönlendirildi */}
-            <Link href="/onboarding" className="px-6 py-2.5 bg-white text-black text-[10px] font-black rounded-full uppercase tracking-widest hover:bg-gray-200 transition-all flex items-center gap-2">
+            {/* 🚀 DÜZELTME 1: Sisteme Giriş -> /login */}
+            <Link href="/login" className="px-6 py-2.5 bg-white text-black text-[10px] font-black rounded-full uppercase tracking-widest hover:bg-gray-200 transition-all flex items-center gap-2">
               Sisteme Giriş <ChevronRight size={14} />
             </Link>
           </div>
@@ -56,11 +56,12 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col md:flex-row gap-6 justify-center">
-            {/* 🚀 SİBER YAMA: Akıllı Yönlendirmeye Bağlandı */}
-            <Link href="/onboarding" className="px-12 py-6 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:-translate-y-2 transition-all flex items-center justify-center gap-3">
+            {/* 🚀 DÜZELTME 2: İŞLETME PANELİ -> /login */}
+            <Link href="/login" className="px-12 py-6 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:-translate-y-2 transition-all flex items-center justify-center gap-3">
               <Building2 size={20} /> İŞLETME PANELİNE GİR
             </Link>
-            <Link href="/onboarding" className="px-12 py-6 bg-[#0F1219] border border-white/10 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] hover:bg-white/5 transition-all flex items-center justify-center gap-3">
+            {/* 🚀 DÜZELTME 3: MÜŞTERİ PORTALI -> /portal */}
+            <Link href="/portal" className="px-12 py-6 bg-[#0F1219] border border-white/10 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] hover:bg-white/5 transition-all flex items-center justify-center gap-3">
               <Store size={20} className="text-[#BC13FE]" /> MÜŞTERİ PORTALINA GİR
             </Link>
           </div>
@@ -186,9 +187,12 @@ export default function LandingPage() {
             TİCARETİN GELECEĞİNE <br /> <span className="text-[#3063E9]">ŞİMDİ</span> BAĞLAN
           </h2>
           <div className="flex flex-col sm:flex-row gap-6 justify-center relative z-10">
-            {/* 🚀 SİBER YAMA: Akıllı Onboarding'e gönderir */}
-            <Link href="/onboarding" className="px-12 py-7 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.3em] hover:bg-gray-200 transition-all">
-              Hemen Kayıt Ol
+            {/* 🚀 DÜZELTME 4: Müşteri Kayıt ve İşletme Kur linkleri */}
+            <Link href="/portal/register" className="px-12 py-7 bg-white text-black rounded-3xl font-black uppercase text-[11px] tracking-[0.3em] hover:bg-gray-200 transition-all">
+              MÜŞTERİ KAYDI OL
+            </Link>
+            <Link href="/login" className="px-12 py-7 bg-transparent border border-white/20 text-white rounded-3xl font-black uppercase text-[11px] tracking-[0.2em] hover:bg-white/5 transition-all">
+              İŞLETME KUR
             </Link>
           </div>
         </div>
